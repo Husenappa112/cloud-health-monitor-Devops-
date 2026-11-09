@@ -1,0 +1,16 @@
+---
+# handlers/main.yml — Handlers for the cloud_health_monitor role
+
+- name: Start Docker service
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Verify application health
+  ansible.builtin.uri:
+    url: "{{ health_check_url }}"
+    return_content: true
+    status_code: 200
+  register: health_check
+  failed_when: health_check.status != 200

@@ -1,0 +1,32 @@
+# Build output
+cloud-health-monitor/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docs / reports
+docs/
+
+# Ansible / Kubernetes (not needed inside image)
+ansible/
+k8s/
+
+# CI
+Jenkinsfile
+
+# Dev environment
+.env
+*.env
+
+# Maven wrapper cache
+cloud-health-monitor/.mvn/wrapper/maven-wrapper.jar

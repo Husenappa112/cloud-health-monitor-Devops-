@@ -1,0 +1,25 @@
+---
+# deploy.yml — Main playbook: deploys Cloud Health Monitor via Docker
+
+- name: Deploy Cloud Health Monitor
+  hosts: app_servers
+  become: false          # set to true when deploying to a remote Linux host
+  vars:
+    docker_image: "cloud-health-monitor:latest"
+    docker_pull: false   # set to true to pull from a registry instead of using a local image
+
+  pre_tasks:
+    - name: Display deployment variables
+      ansible.builtin.debug:
+        msg:
+          - "App name   : {{ app_name }}"
+          - "App port   : {{ app_port }}"
+          - "Docker image: {{ docker_image }}"
+
+  roles:
+    - cloud_health_monitor
+
+  post_tasks:
+    - name: Show application health
+      ansible.builtin.debug:
+        msg: "Application is UP at http://localhost:{{ app_port }}/health"

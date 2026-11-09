@@ -1,0 +1,13 @@
+---
+# Default values for the cloud_health_monitor role.
+# Override in group_vars, host_vars, or playbook vars.
+
+app_name: cloud-health-monitor
+app_version: "0.0.1-SNAPSHOT"
+app_port: 8081
+app_deploy_dir: /opt/cloud-health-monitor
+app_user: cloudmon
+app_group: cloudmon
+docker_image: "cloud-health-monitor:latest"
+docker_container_name: cloud-health-monitor
+docker_restart_policy: unless-stopped
