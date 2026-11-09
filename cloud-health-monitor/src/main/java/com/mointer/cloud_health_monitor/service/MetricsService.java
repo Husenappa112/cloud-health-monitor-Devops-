@@ -48,4 +48,3 @@ public class MetricsService {
         );
     }
 }
-# Metrics endpoint implemented

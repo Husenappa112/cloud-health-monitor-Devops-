@@ -133,4 +133,3 @@ public class HealthCheckService {
     public long getTotalResponseTimeMs()  { return totalResponseTimeMs.get();  }
     public long getSuccessfulChecks()     { return successfulChecks.get();     }
 }
-# Health check service implemented
