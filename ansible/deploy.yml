@@ -22,4 +22,4 @@
   post_tasks:
     - name: Show application health
       ansible.builtin.debug:
-        msg: "Application is UP at http://localhost:{{ app_port }}/health"
+        msg: "Application is UP at http://localhost:{{ docker_host_port | default(app_port) }}/health"

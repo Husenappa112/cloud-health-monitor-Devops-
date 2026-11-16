@@ -3,9 +3,8 @@ pipeline {
 
     environment {
         APP_NAME    = 'cloud-health-monitor'
-        MAVEN_HOME  = '/tmp/maven'
         JAVA_HOME   = '/usr/lib/jvm/java-21-openjdk-amd64'
-        PATH        = "${MAVEN_HOME}/bin:${JAVA_HOME}/bin:${env.PATH}"
+        PATH        = "${JAVA_HOME}/bin:/usr/bin:/bin:${env.PATH}"
     }
 
     options {

@@ -1,0 +1,21 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "smtp.gmail.com:587"
+  smtp_from: "hhusenappa112@gmail.com"
+  smtp_auth_username: "hhusenappa112@gmail.com"
+  smtp_auth_password_file: "/etc/alertmanager/secrets/gmail_app_password"
+  smtp_require_tls: true
+
+route:
+  receiver: gmail-notifications
+  group_by:
+    - alertname
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 4h
+
+receivers:
+  - name: gmail-notifications
+    email_configs:
+      - to: "hhusenappa112@gmail.com"
+        send_resolved: true

@@ -37,3 +37,10 @@ ansible/roles/*/tasks/*.retry
 
 # ── Spring Boot dev-tools restart trigger ────────────────────────────────────
 .restarttrigger
+# Alertmanager Gmail credentials
+monitoring/alertmanager/secrets/
+
+# Python virtual environment and generated files
+.venv/
+__pycache__/
+*.py[cod]

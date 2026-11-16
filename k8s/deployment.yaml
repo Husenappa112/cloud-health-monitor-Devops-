@@ -32,6 +32,9 @@ spec:
             - name: http
               containerPort: 8081
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cloud-health-config
           env:
             - name: SERVER_PORT
               value: "8081"
