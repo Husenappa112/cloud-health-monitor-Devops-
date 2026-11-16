@@ -1,0 +1,29 @@
+# CODEOWNERS
+# Each line is a file pattern followed by one or more owners.
+# Order matters: later rules override earlier ones.
+
+# Global owners — review required on all changes
+*                           @Husenappa112
+
+# Java source code
+src/main/java/**            @Husenappa112
+src/test/java/**            @Husenappa112
+
+# CI/CD and GitHub configuration
+.github/**                  @Husenappa112
+Jenkinsfile                 @Husenappa112
+Dockerfile                  @Husenappa112
+
+# Kubernetes manifests
+k8s/**                      @Husenappa112
+
+# Monitoring configuration
+monitoring/**               @Husenappa112
+
+# Ansible
+ansible/**                  @Husenappa112
+
+# Maven build files
+pom.xml                     @Husenappa112
+mvnw                        @Husenappa112
+mvnw.cmd                    @Husenappa112
