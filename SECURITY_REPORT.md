@@ -33,7 +33,9 @@ Because the platform permits users to register arbitrary URLs for availability t
    - `172.16.0.0/12`
    - `192.168.0.0/16`
 4. **Cloud Metadata Protection:** Explicitly blocks link-local address `169.254.169.254` (the AWS/GCP/Azure instance metadata service), preventing theft of IAM instance profile credentials.
-5. **DNS Re-Resolution:** Hostnames are resolved to IP addresses at validation time to verify that internal IPs are not masked by custom DNS domains.
+5. **IPv6 Private & Link-Local Ranges:** Rejects IPv6 Unique Local Addresses (`fc00::/7`), IPv6 link-local addresses (`fe80::/10`), and IPv4-mapped IPv6 addresses (`::ffff:x.x.x.x`).
+6. **DNS Re-Resolution:** Hostnames are resolved to IP addresses at validation time to verify that internal IPs are not masked by custom DNS domains.
+7. **Safe 3xx Redirect Evaluation:** Configured `HttpClient.Redirect.NEVER` to prevent open-redirect SSRF bypasses. The monitoring engine intercepts `301/302/303/307/308` redirect `Location` headers and re-evaluates them through `SsrfValidator` before following each hop (capped at 3 hops).
 
 ---
 
@@ -93,6 +95,6 @@ spec:
 ## 5. Security Testing Evidence
 
 Automated JUnit tests in `SsrfValidatorTest` and `UrlMonitorIntegrationTest`:
-- `SsrfValidatorTest`: 11 test cases verifying loopback, private ranges, cloud metadata, and protocol restrictions.
-- `UrlMonitorIntegrationTest`: Verifies HTTP 400 Bad Request return on malicious URL submission.
-- All tests pass with zero failures.
+- `SsrfValidatorTest`: 14 comprehensive test cases verifying loopback, private ranges, cloud metadata, IPv6 ULA (`fc00::1`), IPv6 link-local (`fe80::1`), IPv4-mapped IPv6, and protocol restrictions.
+- `UrlMonitorIntegrationTest`: Verifies HTTP 400 Bad Request return on malicious URL submission and verifies redirect hop re-validation.
+- Full automated test suite: 35 passing tests with zero failures or errors across both root and module test runners.

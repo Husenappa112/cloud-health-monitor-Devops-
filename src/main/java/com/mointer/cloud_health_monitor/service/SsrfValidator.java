@@ -100,27 +100,54 @@ public class SsrfValidator {
 
         // IPv4-specific checks
         if (bytes.length == 4) {
-            int b0 = bytes[0] & 0xFF;
-            int b1 = bytes[1] & 0xFF;
-
-            // 127.0.0.0/8 (Loopback)
-            if (b0 == 127) return true;
-
-            // 10.0.0.0/8 (Private)
-            if (b0 == 10) return true;
-
-            // 172.16.0.0/12 (Private 172.16.0.0 - 172.31.255.255)
-            if (b0 == 172 && (b1 >= 16 && b1 <= 31)) return true;
-
-            // 192.168.0.0/16 (Private)
-            if (b0 == 192 && b1 == 168) return true;
-
-            // 169.254.0.0/16 (Link Local / Cloud Metadata e.g. 169.254.169.254)
-            if (b0 == 169 && b1 == 254) return true;
-
-            // 0.0.0.0/8
-            if (b0 == 0) return true;
+            return isRestrictedIpv4(bytes[0] & 0xFF, bytes[1] & 0xFF);
         }
+
+        // IPv6-specific checks
+        if (bytes.length == 16) {
+            // IPv4-mapped IPv6 address (::ffff:w.x.y.z)
+            boolean isIpv4Mapped = true;
+            for (int i = 0; i < 10; i++) {
+                if (bytes[i] != 0) { isIpv4Mapped = false; break; }
+            }
+            if (isIpv4Mapped && (bytes[10] & 0xFF) == 0xFF && (bytes[11] & 0xFF) == 0xFF) {
+                return isRestrictedIpv4(bytes[12] & 0xFF, bytes[13] & 0xFF);
+            }
+
+            // IPv6 Unique Local Address (fc00::/7 -> fc00:: to fdff::)
+            int firstByte = bytes[0] & 0xFF;
+            if ((firstByte & 0xFE) == 0xFC) {
+                return true;
+            }
+
+            // IPv6 Link-Local (fe80::/10)
+            int secondByte = bytes[1] & 0xFF;
+            if (firstByte == 0xFE && (secondByte & 0xC0) == 0x80) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isRestrictedIpv4(int b0, int b1) {
+        // 127.0.0.0/8 (Loopback)
+        if (b0 == 127) return true;
+
+        // 10.0.0.0/8 (Private RFC 1918)
+        if (b0 == 10) return true;
+
+        // 172.16.0.0/12 (Private RFC 1918 172.16.0.0 - 172.31.255.255)
+        if (b0 == 172 && (b1 >= 16 && b1 <= 31)) return true;
+
+        // 192.168.0.0/16 (Private RFC 1918)
+        if (b0 == 192 && b1 == 168) return true;
+
+        // 169.254.0.0/16 (Link Local / Cloud Metadata e.g. 169.254.169.254)
+        if (b0 == 169 && b1 == 254) return true;
+
+        // 0.0.0.0/8 (Broadcast/Current network)
+        if (b0 == 0) return true;
 
         return false;
     }

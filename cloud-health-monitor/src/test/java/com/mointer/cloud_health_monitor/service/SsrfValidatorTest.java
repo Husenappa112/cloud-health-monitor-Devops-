@@ -37,6 +37,9 @@ class SsrfValidatorTest {
             "http://10.0.0.1/admin",
             "http://192.168.1.1/router",
             "http://172.16.0.1/",
+            "http://[::1]:8080",
+            "http://[fe80::1]/",
+            "http://[fc00::1]/",
             "file:///etc/passwd",
             "ftp://ftp.example.com",
             "gopher://evil.com"

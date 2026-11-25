@@ -13,20 +13,21 @@
 
 | Subsystem / Requirement | Criteria | Verified Live Result | Status |
 | :--- | :--- | :--- | :--- |
-| **Spring Boot Application** | Java 21, Spring Boot 4.1.2, `/health`, `/services`, `/metrics` | HTTP 200 OK on NodePort 30081 (`{"status":"UP","application":"Cloud Health Monitor"}`) | **ACCEPTED** |
-| **Unit & Integration Tests**| 15 JUnit tests passing | 15/15 tests passing in `cloud-health-monitor/` test suite | **ACCEPTED** |
+| **Spring Boot Application** | Java 21, Spring Boot 4.1.2, `/health`, `/monitors`, `/incidents`, `/actuator/prometheus` | HTTP 200 OK on Port 8081 & NodePort 30081 (`{"status":"UP","application":"Cloud Health Monitor"}`) | **ACCEPTED** |
+| **Unit & Integration Tests**| Comprehensive test suite | 35/35 tests passing cleanly across root and module test runners | **ACCEPTED** |
 | **Docker Container Security**| Non-root user, multi-stage build | `appuser:100:101`, read-only root enforced, emptyDir `/tmp` scratch space | **ACCEPTED** |
-| **Kubernetes Deployment** | 3 replicas, zero-downtime rolling update, health probes | 3/3 pods `Running (1/1)` on `docker-desktop`, Revision 11 active | **ACCEPTED** |
+| **Kubernetes Deployment** | 3 replicas, zero-downtime rolling update, health probes | 3/3 pods `Running (1/1)` on `docker-desktop`, image `cloud-health-monitor:v2` | **ACCEPTED** |
 | **Kubernetes Service** | NodePort 30081 exposed, session affinity | NodePort 30081 active, `sessionAffinity: ClientIP` (3 hours) | **ACCEPTED** |
 | **Prometheus Monitoring** | Active scrapes every 15s | 2 targets UP (`cloud-health-monitor` and `cloud-health-monitor-kubernetes`) | **ACCEPTED** |
-| **Alert Rules** | 4 rules loaded and evaluating | 4 rules active (`ApplicationDown`, `HighResponseTime`, `HighCPUUsage`, `HighJvmMemoryUsage`) | **ACCEPTED** |
+| **Alert Rules** | Custom alert rules loaded and evaluating | 6 production URL rules active (`MonitoredServiceDown`, `MonitoredServiceLatencyHigh`, `MonitoredServiceDegraded`, `SslCertificateExpiringSoon`, `SslCertificateExpired`, `DnsLookupLatencyHigh`) | **ACCEPTED** |
 | **Alertmanager Notifications**| Routing and SMTP configuration | Gmail receiver configured (`smtp.gmail.com:587`), version 0.35.0 active | **ACCEPTED** |
-| **Grafana Observability** | Accessible dashboards receiving data | 18 dashboards verified in Grafana, connected to Prometheus datasource | **ACCEPTED** |
+| **Grafana Observability** | Accessible dashboards receiving data | Dashboards active and connected to Prometheus datasource | **ACCEPTED** |
 | **Jenkins Pipeline** | 8-stage automated build & deploy | Build #12 completed with `SUCCESS` on branch `develop` with auto-rollback | **ACCEPTED** |
 | **GitHub Actions CI** | Cloud verification on push | Run #45591464696 on commit `ed3d109` completed with `SUCCESS` across all 3 jobs | **ACCEPTED** |
 | **Ansible Automation** | Deployment playbook and role | `ansible/deploy.yml` with role `cloud_health_monitor` and health retries | **ACCEPTED** |
 | **Locust Load Testing** | User traffic simulation script | `locustfile.py` with weighted distribution across `/health` and `/actuator/prometheus` | **ACCEPTED** |
-| **Git & Working Tree State**| Clean repository, preserved stash | Working tree clean, HEAD matches `origin/develop`, `stash@{0}` preserved | **ACCEPTED** |
+| **Database Persistence** | Multi-profile persistence | H2 persistent disk file default + PostgreSQL profile via `application-postgres.properties` | **ACCEPTED** |
+| **SSRF & Web Security** | Loopback, RFC 1918, cloud metadata, IPv6 ULA/link-local, 3xx redirect re-validation | All private/loopback/cloud metadata/redirect vectors blocked with HTTP 400 | **ACCEPTED** |
 
 ---
 

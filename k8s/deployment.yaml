@@ -30,8 +30,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: cloud-health-monitor
-          # Verified Jenkins Build #12 image with Actuator Prometheus support
-          image: cloud-health-monitor:jenkins-12
+          # Production image with full URL monitoring, SSL, DNS, and Prometheus support
+          image: cloud-health-monitor:v2
           imagePullPolicy: Never
           securityContext:
             allowPrivilegeEscalation: false
@@ -81,7 +81,7 @@ spec:
             httpGet:
               path: /health
               port: 8081
-            failureThreshold: 10
+            failureThreshold: 20
             periodSeconds: 10
       volumes:
         - name: tmp-dir
