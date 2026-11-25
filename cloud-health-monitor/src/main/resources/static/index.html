@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Health Monitor — Application Availability & Performance Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2338bdf8'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z'/></svg>">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      CloudHealth
+    </div>
+    <ul class="nav-links">
+      <li class="nav-item active" onclick="switchTab('dashboard')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Overview
+      </li>
+      <li class="nav-item" onclick="switchTab('monitors')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+        Monitors
+      </li>
+      <li class="nav-item" onclick="switchTab('incidents')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        Incidents
+      </li>
+      <li class="nav-item" onclick="switchTab('analytics')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        Analytics
+      </li>
+      <li class="nav-item" onclick="switchTab('status-page')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+        Public Status
+      </li>
+    </ul>
+    <div class="sidebar-footer">
+      <div>Engine: <strong>Java 21 / Spring Boot 4</strong></div>
+      <div>Metrics: <strong>Prometheus & Micrometer</strong></div>
+      <div>Persistence: <strong>JPA & H2 / Postgres</strong></div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-wrapper">
+    <header class="top-bar">
+      <h1 id="page-title">Monitoring Overview</h1>
+      <div class="top-bar-actions">
+        <button class="btn btn-secondary" onclick="fetchData()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary" onclick="openAddModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add Monitor
+        </button>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- View: Dashboard & Monitors -->
+      <section id="view-dashboard">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="label">Total Monitors</span>
+            <span class="value" id="stat-total">0</span>
+          </div>
+          <div class="stat-card up">
+            <span class="label">Operational (UP)</span>
+            <span class="value" id="stat-up">0</span>
+          </div>
+          <div class="stat-card degraded">
+            <span class="label">Degraded</span>
+            <span class="value" id="stat-degraded">0</span>
+          </div>
+          <div class="stat-card down">
+            <span class="label">Down / Outage</span>
+            <span class="value" id="stat-down">0</span>
+          </div>
+          <div class="stat-card uptime">
+            <span class="label">Overall Uptime</span>
+            <span class="value" id="stat-uptime">100.0%</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Active Incidents</span>
+            <span class="value" id="stat-incidents" style="color: #f87171;">0</span>
+          </div>
+        </div>
+
+        <!-- Monitors Table Card -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-header">
+            <span class="card-title">Monitored Endpoints</span>
+            <div style="display: flex; gap: 12px;">
+              <input type="text" id="search-input" placeholder="Search monitors..." class="form-control" style="width: 220px;" oninput="filterMonitors()">
+              <select id="status-filter" class="form-control" onchange="filterMonitors()" style="width: 140px;">
+                <option value="ALL">All Statuses</option>
+                <option value="UP">UP Only</option>
+                <option value="DEGRADED">Degraded Only</option>
+                <option value="DOWN">DOWN Only</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table id="monitors-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Service Name</th>
+                  <th>Target URL</th>
+                  <th>HTTP Code</th>
+                  <th>Latency</th>
+                  <th>DNS</th>
+                  <th>SSL Expiry</th>
+                  <th>Last Checked</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="monitors-tbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading monitors...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Incidents -->
+      <section id="view-incidents" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Incident Lifecycle Tracking</span>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Incident ID</th>
+                  <th>Service</th>
+                  <th>Status</th>
+                  <th>Type</th>
+                  <th>Root Cause</th>
+                  <th>Started At</th>
+                  <th>Duration</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="incidents-tbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">No incidents recorded.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Analytics -->
+      <section id="view-analytics" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">System & Monitor Performance Analytics</span>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Service Name</th>
+                  <th>24h Uptime</th>
+                  <th>7d Uptime</th>
+                  <th>30d Uptime</th>
+                  <th>Avg Latency (24h)</th>
+                  <th>Min / Max (24h)</th>
+                  <th>Checks (24h)</th>
+                  <th>Total Incidents</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-tbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading analytics...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Public Status Page -->
+      <section id="view-status-page" style="display: none;">
+        <div id="status-banner" class="status-banner operational">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          <span id="banner-text">All Systems Operational</span>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-header">
+            <span class="card-title">Services Status</span>
+          </div>
+          <div id="status-page-list" style="padding: 16px 24px; display: flex; flex-direction: column; gap: 12px;">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Add Monitor Modal -->
+  <div class="modal-overlay" id="add-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 style="font-size: 1.15rem;">Register New URL Monitor</h3>
+        <button style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;" onclick="closeAddModal()">&times;</button>
+      </div>
+      <form id="add-monitor-form" onsubmit="submitAddMonitor(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="mon-name">Service Name</label>
+            <input type="text" id="mon-name" class="form-control" placeholder="e.g. Google Search" required>
+          </div>
+          <div class="form-group">
+            <label for="mon-url">Target URL (HTTP / HTTPS)</label>
+            <input type="url" id="mon-url" class="form-control" placeholder="https://google.com" required>
+            <small style="color: var(--text-muted); font-size: 0.75rem;">SSRF Protected: Private IPs, loopback, and cloud metadata addresses are rejected.</small>
+          </div>
+          <div class="form-group">
+            <label for="mon-interval">Monitoring Interval</label>
+            <select id="mon-interval" class="form-control">
+              <option value="30">Every 30 seconds</option>
+              <option value="60" selected>Every 60 seconds (1 min)</option>
+              <option value="120">Every 2 minutes</option>
+              <option value="300">Every 5 minutes</option>
+            </select>
+          </div>
+          <div id="modal-error" style="color: var(--danger); font-size: 0.85rem; display: none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Start Monitoring</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Monitor Details & History Modal -->
+  <div class="modal-overlay" id="details-modal">
+    <div class="modal" style="max-width: 750px;">
+      <div class="modal-header">
+        <h3 id="details-title">Monitor Details</h3>
+        <button style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;" onclick="closeDetailsModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+          <div class="stat-card" style="padding: 12px;">
+            <span class="label">SSL Certificate</span>
+            <div id="details-ssl" style="font-size: 1rem; font-weight: 600; margin-top: 4px;">N/A</div>
+          </div>
+          <div class="stat-card" style="padding: 12px;">
+            <span class="label">DNS Lookup</span>
+            <div id="details-dns" style="font-size: 1rem; font-weight: 600; margin-top: 4px;">N/A</div>
+          </div>
+          <div class="stat-card" style="padding: 12px;">
+            <span class="label">Last Latency</span>
+            <div id="details-latency" style="font-size: 1rem; font-weight: 600; margin-top: 4px;">N/A</div>
+          </div>
+        </div>
+
+        <h4 style="font-size: 0.95rem; margin-top: 12px; color: var(--text-secondary);">Recent Health Check History (Last 20)</h4>
+        <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Code</th>
+                <th>Latency</th>
+                <th>Details / Error</th>
+              </tr>
+            </thead>
+            <tbody id="details-history-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeDetailsModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
