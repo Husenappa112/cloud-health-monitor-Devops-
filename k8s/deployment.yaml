@@ -21,13 +21,24 @@ spec:
         app: cloud-health-monitor
         version: "0.0.1"
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: cloud-health-monitor
-          # For Minikube: load the local image with
-          #   minikube image load cloud-health-monitor:latest
-          # then set imagePullPolicy: Never
-          image: cloud-health-monitor:latest
+          # Verified Jenkins Build #12 image with Actuator Prometheus support
+          image: cloud-health-monitor:jenkins-12
           imagePullPolicy: Never
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: http
               containerPort: 8081
@@ -47,6 +58,9 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          volumeMounts:
+            - name: tmp-dir
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: /health
@@ -69,4 +83,7 @@ spec:
               port: 8081
             failureThreshold: 10
             periodSeconds: 10
+      volumes:
+        - name: tmp-dir
+          emptyDir: {}
       terminationGracePeriodSeconds: 30
