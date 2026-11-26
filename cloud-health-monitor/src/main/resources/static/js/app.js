@@ -1,8 +1,50 @@
 let monitorsData = [];
 let activeTab = 'dashboard';
 
+/**
+ * Returns the effective API Base URL:
+ * 1. window.__API_BASE_URL__ (from config.js or inline script)
+ * 2. localStorage value 'CHM_API_BASE_URL' (custom user override in UI)
+ * 3. Default: empty string (relative paths for local dev / embedded Spring Boot)
+ */
+function getApiBaseUrl() {
+  const custom = localStorage.getItem('CHM_API_BASE_URL');
+  if (custom && custom.trim() !== '') {
+    return custom.trim().replace(/\/$/, '');
+  }
+  if (typeof window.__API_BASE_URL__ === 'string' && window.__API_BASE_URL__.trim() !== '') {
+    return window.__API_BASE_URL__.trim().replace(/\/$/, '');
+  }
+  return '';
+}
+
+function getApiUrl(path) {
+  const base = getApiBaseUrl();
+  const cleanPath = path.startsWith('/') ? path : '/' + path;
+  return base ? `${base}${cleanPath}` : cleanPath;
+}
+
+function updateApiStatusIndicator() {
+  const label = document.getElementById('api-endpoint-label');
+  const dot = document.getElementById('api-status-dot');
+  if (!label) return;
+
+  const base = getApiBaseUrl();
+  if (base) {
+    try {
+      const u = new URL(base);
+      label.textContent = `API: ${u.host}`;
+    } catch {
+      label.textContent = `API: ${base}`;
+    }
+  } else {
+    label.textContent = 'API: Same Origin (Local/Render)';
+  }
+}
+
 // DOM ready
 document.addEventListener('DOMContentLoaded', () => {
+  updateApiStatusIndicator();
   fetchData();
   setInterval(() => {
     if (activeTab === 'dashboard' || activeTab === 'monitors') {
@@ -18,7 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function switchTab(tabId) {
   activeTab = tabId;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  event.currentTarget.classList.add('active');
+  if (event && event.currentTarget) {
+    event.currentTarget.classList.add('active');
+  }
 
   const titles = {
     'dashboard': 'Monitoring Overview',
@@ -42,8 +86,8 @@ function switchTab(tabId) {
 async function fetchData(showLoading = true) {
   try {
     const [overviewRes, monitorsRes] = await Promise.all([
-      fetch('/monitors/overview'),
-      fetch('/monitors')
+      fetch(getApiUrl('/monitors/overview')),
+      fetch(getApiUrl('/monitors'))
     ]);
 
     if (overviewRes.ok) {
@@ -76,6 +120,12 @@ async function fetchData(showLoading = true) {
     }
   } catch (err) {
     console.error('Failed to load monitoring data:', err);
+    const banner = document.getElementById('status-banner');
+    const bannerText = document.getElementById('banner-text');
+    if (banner && bannerText) {
+      banner.className = 'status-banner incident';
+      bannerText.textContent = `Backend connection warning: ${err.message}. If backend is hosted on Render free tier, allow 30-50s for wake-up.`;
+    }
   }
 }
 
@@ -135,7 +185,7 @@ function filterMonitors() {
 
 async function checkNow(id) {
   try {
-    const res = await fetch(`/monitors/${id}/check`, { method: 'POST' });
+    const res = await fetch(getApiUrl(`/monitors/${id}/check`), { method: 'POST' });
     if (res.ok) {
       await fetchData(false);
     }
@@ -147,7 +197,7 @@ async function checkNow(id) {
 async function deleteMonitor(id) {
   if (!confirm('Are you sure you want to remove this monitor?')) return;
   try {
-    const res = await fetch(`/monitors/${id}`, { method: 'DELETE' });
+    const res = await fetch(getApiUrl(`/monitors/${id}`), { method: 'DELETE' });
     if (res.ok) {
       await fetchData(false);
     }
@@ -176,7 +226,7 @@ async function submitAddMonitor(e) {
   const monitoringInterval = parseInt(document.getElementById('mon-interval').value);
 
   try {
-    const res = await fetch('/monitors', {
+    const res = await fetch(getApiUrl('/monitors'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, url, monitoringInterval })
@@ -208,7 +258,7 @@ async function openDetails(id) {
   document.getElementById('details-latency').textContent = m.lastResponseTimeMs ? `${m.lastResponseTimeMs} ms` : '-';
 
   try {
-    const historyRes = await fetch(`/monitors/${id}/history`);
+    const historyRes = await fetch(getApiUrl(`/monitors/${id}/history`));
     if (historyRes.ok) {
       const history = await historyRes.json();
       const tbody = document.getElementById('details-history-tbody');
@@ -246,7 +296,7 @@ function closeDetailsModal() {
 async function fetchIncidents() {
   const tbody = document.getElementById('incidents-tbody');
   try {
-    const res = await fetch('/incidents');
+    const res = await fetch(getApiUrl('/incidents'));
     if (res.ok) {
       const incidents = await res.json();
       if (incidents.length === 0) {
@@ -281,7 +331,7 @@ async function fetchIncidents() {
 
 async function resolveIncident(id) {
   try {
-    const res = await fetch(`/incidents/${id}/resolve`, {
+    const res = await fetch(getApiUrl(`/incidents/${id}/resolve`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note: 'Manually resolved by administrator' })
@@ -306,7 +356,7 @@ async function fetchAnalytics() {
 
   try {
     const statsList = await Promise.all(monitorsData.map(async m => {
-      const res = await fetch(`/monitors/${m.id}/statistics`);
+      const res = await fetch(getApiUrl(`/monitors/${m.id}/statistics`));
       if (res.ok) {
         const stats = await res.json();
         return { monitor: m, stats };
@@ -355,6 +405,35 @@ function renderStatusPage() {
       </div>
     `;
   }).join('');
+}
+
+function openApiConfigModal() {
+  const current = getApiBaseUrl();
+  const input = document.getElementById('api-config-input');
+  if (input) input.value = current;
+  const modal = document.getElementById('api-config-modal');
+  if (modal) modal.classList.add('active');
+}
+
+function closeApiConfigModal() {
+  const modal = document.getElementById('api-config-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function saveApiConfig(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById('api-config-input');
+  if (input) {
+    const val = input.value.trim();
+    if (val) {
+      localStorage.setItem('CHM_API_BASE_URL', val);
+    } else {
+      localStorage.removeItem('CHM_API_BASE_URL');
+    }
+  }
+  closeApiConfigModal();
+  updateApiStatusIndicator();
+  fetchData();
 }
 
 function escapeHtml(str) {
