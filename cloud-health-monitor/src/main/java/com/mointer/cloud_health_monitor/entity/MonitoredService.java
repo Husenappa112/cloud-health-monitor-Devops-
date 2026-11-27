@@ -4,12 +4,13 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 /**
- * JPA entity representing a registered monitored service/URL.
+ * JPA entity representing a registered monitored service/URL with comprehensive health metrics.
  */
 @Entity
 @Table(name = "monitored_services", indexes = {
         @Index(name = "idx_service_name", columnList = "name", unique = true),
-        @Index(name = "idx_service_status", columnList = "currentStatus")
+        @Index(name = "idx_service_status", columnList = "currentStatus"),
+        @Index(name = "idx_service_url", columnList = "url")
 })
 public class MonitoredService {
 
@@ -41,14 +42,47 @@ public class MonitoredService {
     @Column(name = "last_status_code")
     private Integer lastStatusCode;
 
+    @Column(name = "dns_status", length = 30)
+    private String dnsStatus;
+
+    @Column(name = "dns_lookup_time_ms")
+    private Long dnsLookupTimeMs;
+
+    @Column(name = "connection_status", length = 50)
+    private String connectionStatus;
+
+    @Column(name = "ssl_valid")
+    private Boolean sslValid;
+
     @Column(name = "ssl_days_remaining")
     private Long sslDaysRemaining;
+
+    @Column(name = "ssl_expiry_date")
+    private Instant sslExpiryDate;
 
     @Column(name = "ssl_issuer", length = 255)
     private String sslIssuer;
 
-    @Column(name = "dns_lookup_time_ms")
-    private Long dnsLookupTimeMs;
+    @Column(name = "redirect_count")
+    private Integer redirectCount;
+
+    @Column(name = "final_url", length = 1024)
+    private String finalUrl;
+
+    @Column(name = "last_successful_check_at")
+    private Instant lastSuccessfulCheckAt;
+
+    @Column(name = "last_failed_check_at")
+    private Instant lastFailedCheckAt;
+
+    @Column(name = "consecutive_failures", nullable = false)
+    private int consecutiveFailures = 0;
+
+    @Column(name = "uptime_percentage")
+    private Double uptimePercentage = 100.0;
+
+    @Column(name = "downtime_duration_seconds")
+    private Long downtimeDurationSeconds = 0L;
 
     @Column(name = "error_message", length = 500)
     private String errorMessage;
@@ -67,6 +101,9 @@ public class MonitoredService {
         this.monitoringInterval = monitoringInterval > 0 ? monitoringInterval : 60;
         this.enabled = true;
         this.currentStatus = "UNKNOWN";
+        this.uptimePercentage = 100.0;
+        this.consecutiveFailures = 0;
+        this.downtimeDurationSeconds = 0L;
     }
 
     @PrePersist
@@ -155,12 +192,52 @@ public class MonitoredService {
         this.lastStatusCode = lastStatusCode;
     }
 
+    public String getDnsStatus() {
+        return dnsStatus;
+    }
+
+    public void setDnsStatus(String dnsStatus) {
+        this.dnsStatus = dnsStatus;
+    }
+
+    public Long getDnsLookupTimeMs() {
+        return dnsLookupTimeMs;
+    }
+
+    public void setDnsLookupTimeMs(Long dnsLookupTimeMs) {
+        this.dnsLookupTimeMs = dnsLookupTimeMs;
+    }
+
+    public String getConnectionStatus() {
+        return connectionStatus;
+    }
+
+    public void setConnectionStatus(String connectionStatus) {
+        this.connectionStatus = connectionStatus;
+    }
+
+    public Boolean getSslValid() {
+        return sslValid;
+    }
+
+    public void setSslValid(Boolean sslValid) {
+        this.sslValid = sslValid;
+    }
+
     public Long getSslDaysRemaining() {
         return sslDaysRemaining;
     }
 
     public void setSslDaysRemaining(Long sslDaysRemaining) {
         this.sslDaysRemaining = sslDaysRemaining;
+    }
+
+    public Instant getSslExpiryDate() {
+        return sslExpiryDate;
+    }
+
+    public void setSslExpiryDate(Instant sslExpiryDate) {
+        this.sslExpiryDate = sslExpiryDate;
     }
 
     public String getSslIssuer() {
@@ -171,12 +248,60 @@ public class MonitoredService {
         this.sslIssuer = sslIssuer;
     }
 
-    public Long getDnsLookupTimeMs() {
-        return dnsLookupTimeMs;
+    public Integer getRedirectCount() {
+        return redirectCount;
     }
 
-    public void setDnsLookupTimeMs(Long dnsLookupTimeMs) {
-        this.dnsLookupTimeMs = dnsLookupTimeMs;
+    public void setRedirectCount(Integer redirectCount) {
+        this.redirectCount = redirectCount;
+    }
+
+    public String getFinalUrl() {
+        return finalUrl;
+    }
+
+    public void setFinalUrl(String finalUrl) {
+        this.finalUrl = finalUrl;
+    }
+
+    public Instant getLastSuccessfulCheckAt() {
+        return lastSuccessfulCheckAt;
+    }
+
+    public void setLastSuccessfulCheckAt(Instant lastSuccessfulCheckAt) {
+        this.lastSuccessfulCheckAt = lastSuccessfulCheckAt;
+    }
+
+    public Instant getLastFailedCheckAt() {
+        return lastFailedCheckAt;
+    }
+
+    public void setLastFailedCheckAt(Instant lastFailedCheckAt) {
+        this.lastFailedCheckAt = lastFailedCheckAt;
+    }
+
+    public int getConsecutiveFailures() {
+        return consecutiveFailures;
+    }
+
+    public void setConsecutiveFailures(int consecutiveFailures) {
+        this.consecutiveFailures = consecutiveFailures;
+    }
+
+    public Double getUptimePercentage() {
+        return uptimePercentage;
+    }
+
+    public void setUptimePercentage(Double uptimePercentage) {
+        this.uptimePercentage = uptimePercentage;
+    }
+
+    public Long getDowntimeDurationSeconds() {
+        return downtimeDurationSeconds;
+    }
+
+    public void setDowntimeDurationSeconds(Long downtimeDurationSeconds) {
+        this.downtimeDurationSeconds = downtimeDurationSeconds;
     }
 
     public String getErrorMessage() {

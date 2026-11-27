@@ -14,9 +14,19 @@ public interface MonitoredServiceRepository extends JpaRepository<MonitoredServi
 
     boolean existsByNameIgnoreCase(String name);
 
+    Optional<MonitoredService> findByUrl(String url);
+
+    boolean existsByUrl(String url);
+
     List<MonitoredService> findByEnabledTrue();
+
+    List<MonitoredService> findByEnabledFalse();
 
     List<MonitoredService> findByCurrentStatus(String currentStatus);
 
     long countByCurrentStatus(String currentStatus);
+
+    long countByEnabledTrue();
+
+    long countByEnabledFalse();
 }

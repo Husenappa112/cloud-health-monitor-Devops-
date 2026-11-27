@@ -14,6 +14,8 @@
   --warning-bg: rgba(245, 158, 11, 0.15);
   --danger: #ef4444;
   --danger-bg: rgba(239, 68, 68, 0.15);
+  --paused: #a855f7;
+  --paused-bg: rgba(168, 85, 247, 0.15);
   --info: #6366f1;
   --radius: 10px;
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
@@ -102,13 +104,14 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   overflow-y: auto;
 }
 
 .top-bar {
+  padding: 20px 32px;
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  padding: 16px 32px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -116,81 +119,31 @@ body {
 
 .top-bar h1 {
   font-size: 1.5rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .top-bar-actions {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.btn {
-  padding: 8px 16px;
-  border-radius: var(--radius);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background-color: var(--accent);
-  color: #0f172a;
-}
-
-.btn-primary:hover {
-  background-color: var(--accent-hover);
-}
-
-.btn-secondary {
-  background-color: #334155;
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-  background-color: #475569;
-}
-
-.btn-sm {
-  padding: 4px 10px;
-  font-size: 0.8rem;
-}
-
-.btn-danger {
-  background-color: var(--danger);
-  color: #fff;
-}
-
-.btn-success {
-  background-color: var(--success);
-  color: #fff;
-}
-
-/* Content */
 .content {
   padding: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  flex: 1;
 }
 
-/* Cards Grid */
+/* Stats Cards */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
 }
 
 .stat-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -200,21 +153,22 @@ body {
 .stat-card .label {
   font-size: 0.85rem;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 500;
 }
 
 .stat-card .value {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
+  color: var(--text-primary);
 }
 
 .stat-card.up .value { color: var(--success); }
 .stat-card.degraded .value { color: var(--warning); }
 .stat-card.down .value { color: var(--danger); }
 .stat-card.uptime .value { color: var(--accent); }
+.stat-card.paused .value { color: var(--paused); }
 
-/* Table Container */
+/* Table & Card */
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -224,11 +178,13 @@ body {
 }
 
 .card-header {
-  padding: 20px 24px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .card-title {
@@ -245,26 +201,18 @@ table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  font-size: 0.9rem;
+}
+
+th, td {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 th {
   background-color: rgba(15, 23, 42, 0.4);
   color: var(--text-secondary);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-td {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 0.9rem;
-}
-
-tr:last-child td {
-  border-bottom: none;
+  font-weight: 600;
 }
 
 tr:hover {
@@ -279,23 +227,28 @@ tr:hover {
   padding: 4px 10px;
   border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
 .badge-up {
   background-color: var(--success-bg);
-  color: var(--success);
+  color: #34d399;
 }
 
 .badge-degraded {
   background-color: var(--warning-bg);
-  color: var(--warning);
+  color: #fbbf24;
 }
 
 .badge-down {
   background-color: var(--danger-bg);
-  color: var(--danger);
+  color: #f87171;
+}
+
+.badge-paused {
+  background-color: var(--paused-bg);
+  color: #c084fc;
 }
 
 .badge-unknown {
@@ -310,7 +263,73 @@ tr:hover {
   background-color: currentColor;
 }
 
-/* Modal */
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: #0f172a;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background-color: #475569;
+}
+
+.btn-warning {
+  background-color: #d97706;
+  color: white;
+}
+
+.btn-warning:hover {
+  background-color: #b45309;
+}
+
+.btn-success {
+  background-color: #059669;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #047857;
+}
+
+.btn-danger {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-danger:hover {
+  background-color: var(--danger);
+  color: white;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+}
+
+/* Modals */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -354,7 +373,7 @@ tr:hover {
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .form-group {
@@ -412,4 +431,30 @@ tr:hover {
   background-color: var(--danger-bg);
   border: 1px solid var(--danger);
   color: #f87171;
+}
+
+/* Sparkline / Chart Canvas */
+.chart-container {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.sparkline-canvas {
+  width: 100%;
+  height: 90px;
+  border-radius: 6px;
+  background-color: #0b1120;
 }

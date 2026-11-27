@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -22,6 +23,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Coordinates automated periodic health checks for all enabled registered monitors.
+ * Maintains consecutive failures, uptime percentages, downtime duration, and incident lifecycle.
  */
 @Service
 @EnableScheduling
@@ -34,6 +36,7 @@ public class ScheduledMonitoringService {
     private final UrlHealthMonitoringEngine monitoringEngine;
     private final IncidentManagementService incidentService;
     private final PrometheusMetricsExportService metricsExportService;
+    private final UptimeAnalyticsService analyticsService;
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
     private final Set<Long> inFlightChecks = ConcurrentHashMap.newKeySet();
@@ -42,12 +45,14 @@ public class ScheduledMonitoringService {
                                       HealthCheckRecordRepository recordRepository,
                                       UrlHealthMonitoringEngine monitoringEngine,
                                       IncidentManagementService incidentService,
-                                      PrometheusMetricsExportService metricsExportService) {
+                                      PrometheusMetricsExportService metricsExportService,
+                                      UptimeAnalyticsService analyticsService) {
         this.serviceRepository = serviceRepository;
         this.recordRepository = recordRepository;
         this.monitoringEngine = monitoringEngine;
         this.incidentService = incidentService;
         this.metricsExportService = metricsExportService;
+        this.analyticsService = analyticsService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -59,6 +64,7 @@ public class ScheduledMonitoringService {
     /**
      * Periodic background tick running every 10 seconds.
      * Evaluates which enabled monitors are due for their next check based on their individual interval.
+     * Paused/disabled monitors are strictly excluded.
      */
     @Scheduled(fixedDelay = 10000)
     public void runSchedulerTick() {
@@ -104,18 +110,37 @@ public class ScheduledMonitoringService {
         String prevStatus = service.getCurrentStatus();
         UrlHealthMonitoringEngine.CheckExecutionResult result = monitoringEngine.executeCheck(service.getUrl());
 
-        // Update service state
+        // Update basic service state and metrics
         service.setCurrentStatus(result.status());
         service.setLastCheckedAt(result.checkedAt());
         service.setLastResponseTimeMs(result.responseTimeMs());
         service.setLastStatusCode(result.httpStatusCode());
-        service.setSslDaysRemaining(result.sslDaysRemaining());
-        service.setSslIssuer(result.sslIssuer());
+        service.setDnsStatus(result.dnsStatus());
         service.setDnsLookupTimeMs(result.dnsLookupTimeMs());
+        service.setConnectionStatus(result.connectionStatus());
+        service.setSslValid(result.sslValid());
+        service.setSslDaysRemaining(result.sslDaysRemaining());
+        service.setSslExpiryDate(result.sslExpiryDate());
+        service.setSslIssuer(result.sslIssuer());
+        service.setRedirectCount(result.redirectCount());
+        service.setFinalUrl(result.finalUrl());
         service.setErrorMessage(result.errorMessage());
-        serviceRepository.save(service);
 
-        // Record history
+        // Track consecutive failures, downtime duration, and last success/failure timestamps
+        if ("UP".equals(result.status())) {
+            service.setConsecutiveFailures(0);
+            service.setLastSuccessfulCheckAt(result.checkedAt());
+            service.setDowntimeDurationSeconds(0L);
+        } else {
+            service.setConsecutiveFailures(service.getConsecutiveFailures() + 1);
+            service.setLastFailedCheckAt(result.checkedAt());
+            if (service.getLastSuccessfulCheckAt() != null) {
+                long downtimeSec = Duration.between(service.getLastSuccessfulCheckAt(), result.checkedAt()).getSeconds();
+                service.setDowntimeDurationSeconds(Math.max(0L, downtimeSec));
+            }
+        }
+
+        // Record history in repository
         HealthCheckRecord record = new HealthCheckRecord(
                 service.getId(),
                 service.getName(),
@@ -124,10 +149,21 @@ public class ScheduledMonitoringService {
                 result.responseTimeMs(),
                 result.checkedAt(),
                 result.errorMessage(),
+                result.dnsStatus(),
                 result.dnsLookupTimeMs(),
-                result.sslDaysRemaining()
+                result.connectionStatus(),
+                result.sslValid(),
+                result.sslDaysRemaining(),
+                result.sslExpiryDate(),
+                result.redirectCount(),
+                result.finalUrl()
         );
-        recordRepository.save(record);
+        record = recordRepository.save(record);
+
+        // Update real-time uptime percentage
+        double uptime = analyticsService.calculateStatistics(service.getId()).uptime24h();
+        service.setUptimePercentage(uptime);
+        serviceRepository.save(service);
 
         // Trigger incident management lifecycle
         incidentService.handleStatusChange(service, prevStatus, result.status(), result.errorMessage());

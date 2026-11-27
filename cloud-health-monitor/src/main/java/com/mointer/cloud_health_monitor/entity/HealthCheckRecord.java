@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 /**
- * Historical record of a health check event.
+ * Historical record of an individual health check event with all 14 captured metrics.
  */
 @Entity
 @Table(name = "health_check_records", indexes = {
@@ -39,11 +39,29 @@ public class HealthCheckRecord {
     @Column(name = "error_message", length = 500)
     private String errorMessage;
 
+    @Column(name = "dns_status", length = 30)
+    private String dnsStatus;
+
     @Column(name = "dns_lookup_time_ms")
     private Long dnsLookupTimeMs;
 
+    @Column(name = "connection_status", length = 50)
+    private String connectionStatus;
+
+    @Column(name = "ssl_valid")
+    private Boolean sslValid;
+
     @Column(name = "ssl_days_remaining")
     private Long sslDaysRemaining;
+
+    @Column(name = "ssl_expiry_date")
+    private Instant sslExpiryDate;
+
+    @Column(name = "redirect_count")
+    private Integer redirectCount;
+
+    @Column(name = "final_url", length = 1024)
+    private String finalUrl;
 
     public HealthCheckRecord() {}
 
@@ -60,6 +78,30 @@ public class HealthCheckRecord {
         this.errorMessage = errorMessage;
         this.dnsLookupTimeMs = dnsLookupTimeMs;
         this.sslDaysRemaining = sslDaysRemaining;
+    }
+
+    public HealthCheckRecord(Long serviceId, String serviceName, String status,
+                             Integer httpStatusCode, Long responseTimeMs,
+                             Instant checkedAt, String errorMessage,
+                             String dnsStatus, Long dnsLookupTimeMs,
+                             String connectionStatus, Boolean sslValid,
+                             Long sslDaysRemaining, Instant sslExpiryDate,
+                             Integer redirectCount, String finalUrl) {
+        this.serviceId = serviceId;
+        this.serviceName = serviceName;
+        this.status = status;
+        this.httpStatusCode = httpStatusCode;
+        this.responseTimeMs = responseTimeMs;
+        this.checkedAt = checkedAt != null ? checkedAt : Instant.now();
+        this.errorMessage = errorMessage;
+        this.dnsStatus = dnsStatus;
+        this.dnsLookupTimeMs = dnsLookupTimeMs;
+        this.connectionStatus = connectionStatus;
+        this.sslValid = sslValid;
+        this.sslDaysRemaining = sslDaysRemaining;
+        this.sslExpiryDate = sslExpiryDate;
+        this.redirectCount = redirectCount;
+        this.finalUrl = finalUrl;
     }
 
     public Long getId() {
@@ -126,6 +168,14 @@ public class HealthCheckRecord {
         this.errorMessage = errorMessage;
     }
 
+    public String getDnsStatus() {
+        return dnsStatus;
+    }
+
+    public void setDnsStatus(String dnsStatus) {
+        this.dnsStatus = dnsStatus;
+    }
+
     public Long getDnsLookupTimeMs() {
         return dnsLookupTimeMs;
     }
@@ -134,11 +184,51 @@ public class HealthCheckRecord {
         this.dnsLookupTimeMs = dnsLookupTimeMs;
     }
 
+    public String getConnectionStatus() {
+        return connectionStatus;
+    }
+
+    public void setConnectionStatus(String connectionStatus) {
+        this.connectionStatus = connectionStatus;
+    }
+
+    public Boolean getSslValid() {
+        return sslValid;
+    }
+
+    public void setSslValid(Boolean sslValid) {
+        this.sslValid = sslValid;
+    }
+
     public Long getSslDaysRemaining() {
         return sslDaysRemaining;
     }
 
     public void setSslDaysRemaining(Long sslDaysRemaining) {
         this.sslDaysRemaining = sslDaysRemaining;
+    }
+
+    public Instant getSslExpiryDate() {
+        return sslExpiryDate;
+    }
+
+    public void setSslExpiryDate(Instant sslExpiryDate) {
+        this.sslExpiryDate = sslExpiryDate;
+    }
+
+    public Integer getRedirectCount() {
+        return redirectCount;
+    }
+
+    public void setRedirectCount(Integer redirectCount) {
+        this.redirectCount = redirectCount;
+    }
+
+    public String getFinalUrl() {
+        return finalUrl;
+    }
+
+    public void setFinalUrl(String finalUrl) {
+        this.finalUrl = finalUrl;
     }
 }

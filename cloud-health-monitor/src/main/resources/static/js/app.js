@@ -26,7 +26,6 @@ function getApiUrl(path) {
 
 function updateApiStatusIndicator() {
   const label = document.getElementById('api-endpoint-label');
-  const dot = document.getElementById('api-status-dot');
   if (!label) return;
 
   const base = getApiBaseUrl();
@@ -60,8 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function switchTab(tabId) {
   activeTab = tabId;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  if (event && event.currentTarget) {
-    event.currentTarget.classList.add('active');
+  if (window.event && window.event.currentTarget) {
+    window.event.currentTarget.classList.add('active');
   }
 
   const titles = {
@@ -86,8 +85,8 @@ function switchTab(tabId) {
 async function fetchData(showLoading = true) {
   try {
     const [overviewRes, monitorsRes] = await Promise.all([
-      fetch(getApiUrl('/monitors/overview')),
-      fetch(getApiUrl('/monitors'))
+      fetch(getApiUrl('/api/dashboard/summary')),
+      fetch(getApiUrl('/api/monitors'))
     ]);
 
     if (overviewRes.ok) {
@@ -96,27 +95,32 @@ async function fetchData(showLoading = true) {
       document.getElementById('stat-up').textContent = overview.upCount || 0;
       document.getElementById('stat-degraded').textContent = overview.degradedCount || 0;
       document.getElementById('stat-down').textContent = overview.downCount || 0;
-      document.getElementById('stat-uptime').textContent = (overview.overallUptimePercentage || 100) + '%';
+      if (document.getElementById('stat-paused')) {
+        document.getElementById('stat-paused').textContent = overview.pausedCount || 0;
+      }
+      document.getElementById('stat-uptime').textContent = (overview.overallUptimePercentage !== undefined ? overview.overallUptimePercentage : 100) + '%';
       document.getElementById('stat-incidents').textContent = overview.openIncidents || 0;
 
       // Status banner update
       const banner = document.getElementById('status-banner');
       const bannerText = document.getElementById('banner-text');
-      if (overview.downCount > 0) {
-        banner.className = 'status-banner incident';
-        bannerText.textContent = `Major Outage: ${overview.downCount} service(s) currently down!`;
-      } else if (overview.degradedCount > 0) {
-        banner.className = 'status-banner incident';
-        bannerText.textContent = `Partial Outage: ${overview.degradedCount} service(s) degraded.`;
-      } else {
-        banner.className = 'status-banner operational';
-        bannerText.textContent = 'All Systems Operational';
+      if (banner && bannerText) {
+        if (overview.downCount > 0) {
+          banner.className = 'status-banner incident';
+          bannerText.textContent = `Major Outage: ${overview.downCount} service(s) currently down!`;
+        } else if (overview.degradedCount > 0) {
+          banner.className = 'status-banner incident';
+          bannerText.textContent = `Partial Outage: ${overview.degradedCount} service(s) degraded.`;
+        } else {
+          banner.className = 'status-banner operational';
+          bannerText.textContent = 'All Systems Operational';
+        }
       }
     }
 
     if (monitorsRes.ok) {
       monitorsData = await monitorsRes.json();
-      renderMonitorsTable(monitorsData);
+      filterMonitors();
     }
   } catch (err) {
     console.error('Failed to load monitoring data:', err);
@@ -124,45 +128,64 @@ async function fetchData(showLoading = true) {
     const bannerText = document.getElementById('banner-text');
     if (banner && bannerText) {
       banner.className = 'status-banner incident';
-      bannerText.textContent = `Backend connection warning: ${err.message}. If backend is hosted on Render free tier, allow 30-50s for wake-up.`;
+      bannerText.textContent = `Backend connection warning: ${err.message}. If backend is waking up, please wait a moment.`;
     }
   }
 }
 
 function renderMonitorsTable(data) {
   const tbody = document.getElementById('monitors-tbody');
+  if (!tbody) return;
   if (!data || data.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">No monitors registered yet. Click "Add Monitor" to start tracking endpoints!</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">No monitors found matching your criteria. Click "Add Monitor" to start tracking endpoints!</td></tr>`;
     return;
   }
 
   tbody.innerHTML = data.map(m => {
-    const badgeClass = m.currentStatus === 'UP' ? 'badge-up' :
-                       m.currentStatus === 'DEGRADED' ? 'badge-degraded' :
-                       m.currentStatus === 'DOWN' ? 'badge-down' : 'badge-unknown';
+    let badgeClass = 'badge-unknown';
+    let statusLabel = m.currentStatus;
+
+    if (!m.enabled) {
+      badgeClass = 'badge-paused';
+      statusLabel = 'PAUSED';
+    } else if (m.currentStatus === 'UP') {
+      badgeClass = 'badge-up';
+    } else if (m.currentStatus === 'DEGRADED') {
+      badgeClass = 'badge-degraded';
+    } else if (m.currentStatus === 'DOWN') {
+      badgeClass = 'badge-down';
+    }
 
     const latencyText = m.lastResponseTimeMs ? `${m.lastResponseTimeMs} ms` : '-';
     const httpCodeText = m.lastStatusCode ? `${m.lastStatusCode}` : '-';
-    const dnsText = m.dnsLookupTimeMs ? `${m.dnsLookupTimeMs} ms` : '-';
+    const dnsText = m.dnsLookupTimeMs ? `${m.dnsLookupTimeMs} ms` : (m.dnsStatus || '-');
     const sslText = m.sslDaysRemaining !== null && m.sslDaysRemaining !== undefined
-                    ? `${m.sslDaysRemaining}d remaining` : '-';
+                    ? `${m.sslDaysRemaining}d remaining` : (m.sslValid === false ? 'Expired' : '-');
+    const uptimeText = m.uptimePercentage !== null && m.uptimePercentage !== undefined
+                    ? `${m.uptimePercentage}%` : '100.0%';
     const lastChecked = m.lastCheckedAt ? new Date(m.lastCheckedAt).toLocaleTimeString() : 'Never';
+
+    const toggleActionBtn = m.enabled
+      ? `<button class="btn btn-warning btn-sm" onclick="pauseMonitor(${m.id})" title="Pause health checks">Pause</button>`
+      : `<button class="btn btn-success btn-sm" onclick="resumeMonitor(${m.id})" title="Resume health checks">Resume</button>`;
 
     return `
       <tr>
-        <td><span class="badge ${badgeClass}"><span class="dot"></span>${m.currentStatus}</span></td>
+        <td><span class="badge ${badgeClass}"><span class="dot"></span>${statusLabel}</span></td>
         <td><strong>${escapeHtml(m.name)}</strong></td>
-        <td><a href="${escapeHtml(m.url)}" target="_blank" style="color: var(--accent); text-decoration: none;">${escapeHtml(m.url)}</a></td>
+        <td><a href="${escapeHtml(m.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: none;">${escapeHtml(m.url)}</a></td>
         <td>${httpCodeText}</td>
         <td>${latencyText}</td>
         <td>${dnsText}</td>
         <td>${sslText}</td>
-        <td>${lastChecked}</td>
+        <td><strong style="color: ${m.uptimePercentage >= 99 ? 'var(--success)' : 'var(--warning)'}">${uptimeText}</strong></td>
         <td>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn btn-secondary btn-sm" onclick="checkNow(${m.id})">Check</button>
-            <button class="btn btn-secondary btn-sm" onclick="openDetails(${m.id})">Details</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteMonitor(${m.id})">&times;</button>
+          <div style="display: flex; gap: 4px; flex-wrap: nowrap;">
+            <button class="btn btn-secondary btn-sm" onclick="checkNow(${m.id})" title="Execute check now">Check</button>
+            ${toggleActionBtn}
+            <button class="btn btn-secondary btn-sm" onclick="openEditModal(${m.id})" title="Edit parameters">Edit</button>
+            <button class="btn btn-secondary btn-sm" onclick="openDetails(${m.id})" title="View metrics & history">Details</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteMonitor(${m.id})" title="Delete monitor">&times;</button>
           </div>
         </td>
       </tr>
@@ -171,21 +194,38 @@ function renderMonitorsTable(data) {
 }
 
 function filterMonitors() {
-  const query = document.getElementById('search-input').value.toLowerCase();
-  const filter = document.getElementById('status-filter').value;
+  const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+  const filter = document.getElementById('status-filter')?.value || 'ALL';
+  const sort = document.getElementById('sort-filter')?.value || 'default';
 
-  const filtered = monitorsData.filter(m => {
+  let filtered = monitorsData.filter(m => {
     const matchesQuery = m.name.toLowerCase().includes(query) || m.url.toLowerCase().includes(query);
-    const matchesStatus = filter === 'ALL' || m.currentStatus === filter;
+    let matchesStatus = true;
+    if (filter === 'PAUSED') {
+      matchesStatus = !m.enabled;
+    } else if (filter === 'UP' || filter === 'DEGRADED' || filter === 'DOWN') {
+      matchesStatus = m.enabled && m.currentStatus === filter;
+    }
     return matchesQuery && matchesStatus;
   });
+
+  if (sort === 'name') {
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sort === 'latency') {
+    filtered.sort((a, b) => (a.lastResponseTimeMs || 999999) - (b.lastResponseTimeMs || 999999));
+  } else if (sort === 'uptime') {
+    filtered.sort((a, b) => (b.uptimePercentage || 0) - (a.uptimePercentage || 0));
+  } else if (sort === 'status') {
+    const order = { 'DOWN': 1, 'DEGRADED': 2, 'UP': 3, 'UNKNOWN': 4 };
+    filtered.sort((a, b) => (order[a.currentStatus] || 5) - (order[b.currentStatus] || 5));
+  }
 
   renderMonitorsTable(filtered);
 }
 
 async function checkNow(id) {
   try {
-    const res = await fetch(getApiUrl(`/monitors/${id}/check`), { method: 'POST' });
+    const res = await fetch(getApiUrl(`/api/monitors/${id}/check`), { method: 'POST' });
     if (res.ok) {
       await fetchData(false);
     }
@@ -194,10 +234,32 @@ async function checkNow(id) {
   }
 }
 
+async function pauseMonitor(id) {
+  try {
+    const res = await fetch(getApiUrl(`/api/monitors/${id}/pause`), { method: 'POST' });
+    if (res.ok) {
+      await fetchData(false);
+    }
+  } catch (e) {
+    console.error('Pause failed:', e);
+  }
+}
+
+async function resumeMonitor(id) {
+  try {
+    const res = await fetch(getApiUrl(`/api/monitors/${id}/resume`), { method: 'POST' });
+    if (res.ok) {
+      await fetchData(false);
+    }
+  } catch (e) {
+    console.error('Resume failed:', e);
+  }
+}
+
 async function deleteMonitor(id) {
   if (!confirm('Are you sure you want to remove this monitor?')) return;
   try {
-    const res = await fetch(getApiUrl(`/monitors/${id}`), { method: 'DELETE' });
+    const res = await fetch(getApiUrl(`/api/monitors/${id}`), { method: 'DELETE' });
     if (res.ok) {
       await fetchData(false);
     }
@@ -226,7 +288,7 @@ async function submitAddMonitor(e) {
   const monitoringInterval = parseInt(document.getElementById('mon-interval').value);
 
   try {
-    const res = await fetch(getApiUrl('/monitors'), {
+    const res = await fetch(getApiUrl('/api/monitors'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, url, monitoringInterval })
@@ -246,47 +308,222 @@ async function submitAddMonitor(e) {
   }
 }
 
+function openEditModal(id) {
+  const m = monitorsData.find(x => x.id === id);
+  if (!m) return;
+
+  document.getElementById('edit-modal-error').style.display = 'none';
+  document.getElementById('edit-mon-id').value = m.id;
+  document.getElementById('edit-mon-name').value = m.name;
+  document.getElementById('edit-mon-url').value = m.url;
+  document.getElementById('edit-mon-interval').value = m.monitoringInterval || 60;
+  document.getElementById('edit-mon-enabled').checked = m.enabled;
+  document.getElementById('edit-modal').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.remove('active');
+}
+
+async function submitEditMonitor(e) {
+  e.preventDefault();
+  const errorEl = document.getElementById('edit-modal-error');
+  errorEl.style.display = 'none';
+
+  const id = document.getElementById('edit-mon-id').value;
+  const name = document.getElementById('edit-mon-name').value.trim();
+  const url = document.getElementById('edit-mon-url').value.trim();
+  const monitoringInterval = parseInt(document.getElementById('edit-mon-interval').value);
+  const enabled = document.getElementById('edit-mon-enabled').checked;
+
+  try {
+    const res = await fetch(getApiUrl(`/api/monitors/${id}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url, monitoringInterval, enabled })
+    });
+
+    if (res.ok) {
+      closeEditModal();
+      await fetchData(false);
+    } else {
+      const errData = await res.json();
+      errorEl.textContent = errData.message || 'Failed to update monitor';
+      errorEl.style.display = 'block';
+    }
+  } catch (err) {
+    errorEl.textContent = 'Network error: ' + err.message;
+    errorEl.style.display = 'block';
+  }
+}
+
 async function openDetails(id) {
   const m = monitorsData.find(x => x.id === id);
   if (!m) return;
 
-  document.getElementById('details-title').textContent = `${m.name} — Status & History`;
-  document.getElementById('details-ssl').textContent = m.sslDaysRemaining !== null
-    ? `${m.sslDaysRemaining} days remaining (${m.sslIssuer || 'Standard SSL'})`
-    : 'No SSL (HTTP or invalid)';
-  document.getElementById('details-dns').textContent = m.dnsLookupTimeMs ? `${m.dnsLookupTimeMs} ms` : '-';
-  document.getElementById('details-latency').textContent = m.lastResponseTimeMs ? `${m.lastResponseTimeMs} ms` : '-';
+  document.getElementById('details-title').textContent = m.name;
+  document.getElementById('details-subtitle').textContent = `${m.url} (Interval: ${m.monitoringInterval}s)`;
 
+  // Badge
+  const badgeClass = m.currentStatus === 'UP' ? 'badge-up' :
+                     m.currentStatus === 'DEGRADED' ? 'badge-degraded' :
+                     m.currentStatus === 'DOWN' ? 'badge-down' : 'badge-unknown';
+  document.getElementById('details-status-badge').innerHTML = `<span class="badge ${badgeClass}"><span class="dot"></span>${m.currentStatus}</span>`;
+  document.getElementById('details-http-code').textContent = m.lastStatusCode || '-';
+
+  // SSL
+  let sslInfo = 'HTTP / Not applicable';
+  if (m.sslDaysRemaining !== null && m.sslDaysRemaining !== undefined) {
+    sslInfo = `${m.sslDaysRemaining} days remaining (${m.sslIssuer || 'Valid TLS'})`;
+  } else if (m.sslValid === false) {
+    sslInfo = 'Invalid / Expired Certificate';
+  }
+  document.getElementById('details-ssl').textContent = sslInfo;
+
+  // DNS
+  document.getElementById('details-dns').textContent = m.dnsLookupTimeMs
+    ? `${m.dnsLookupTimeMs} ms (${m.dnsStatus || 'SUCCESS'})`
+    : (m.dnsStatus || '-');
+
+  // Connection & Redirects
+  const redirectInfo = m.redirectCount ? `${m.redirectCount} redirect(s)` : 'Direct (0 redirects)';
+  document.getElementById('details-connection').textContent = `${m.connectionStatus || 'CONNECTED'} — ${redirectInfo}`;
+
+  // Fetch uptime analytics (24h, 7d, 30d)
   try {
-    const historyRes = await fetch(getApiUrl(`/monitors/${id}/history`));
+    const statsRes = await fetch(getApiUrl(`/api/monitors/${id}/uptime`));
+    if (statsRes.ok) {
+      const stats = await statsRes.json();
+      document.getElementById('details-uptime-24h').textContent = `${stats.uptime24h}%`;
+      document.getElementById('details-uptime-7d').textContent = `${stats.uptime7d}%`;
+      document.getElementById('details-uptime-30d').textContent = `${stats.uptime30d}%`;
+    }
+  } catch (e) {
+    console.error('Failed to load uptime analytics:', e);
+  }
+
+  // Fetch history & render sparkline
+  try {
+    const historyRes = await fetch(getApiUrl(`/api/monitors/${id}/history`));
     if (historyRes.ok) {
       const history = await historyRes.json();
-      const tbody = document.getElementById('details-history-tbody');
-      if (history.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 16px;">No history recorded yet.</td></tr>`;
-      } else {
-        tbody.innerHTML = history.slice(0, 20).map(h => {
-          const badgeClass = h.status === 'UP' ? 'badge-up' :
-                             h.status === 'DEGRADED' ? 'badge-degraded' : 'badge-down';
-          return `
-            <tr>
-              <td>${new Date(h.checkedAt).toLocaleTimeString()}</td>
-              <td><span class="badge ${badgeClass}"><span class="dot"></span>${h.status}</span></td>
-              <td>${h.httpStatusCode || '-'}</td>
-              <td>${h.responseTimeMs || 0} ms</td>
-              <td style="color: ${h.errorMessage ? 'var(--danger)' : 'var(--text-secondary)'}; font-size: 0.8rem;">
-                ${escapeHtml(h.errorMessage || 'Health check passed normally')}
-              </td>
-            </tr>
-          `;
-        }).join('');
-      }
+      renderDetailsHistory(history);
+      renderSparklineChart(history);
     }
   } catch (e) {
     console.error('History load error:', e);
   }
 
   document.getElementById('details-modal').classList.add('active');
+}
+
+function renderDetailsHistory(history) {
+  const tbody = document.getElementById('details-history-tbody');
+  if (!tbody) return;
+
+  if (!history || history.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">No check records found yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = history.slice(0, 20).map(h => {
+    const badgeClass = h.status === 'UP' ? 'badge-up' :
+                       h.status === 'DEGRADED' ? 'badge-degraded' : 'badge-down';
+    const errorMsg = h.errorMessage ? escapeHtml(h.errorMessage) : 'Health check verified successfully';
+    const errorColor = h.errorMessage ? 'var(--danger)' : 'var(--text-secondary)';
+
+    return `
+      <tr>
+        <td>${new Date(h.checkedAt).toLocaleTimeString()}</td>
+        <td><span class="badge ${badgeClass}"><span class="dot"></span>${h.status}</span></td>
+        <td>${h.httpStatusCode || '-'}</td>
+        <td>${h.responseTimeMs || 0} ms</td>
+        <td>${h.dnsLookupTimeMs ? h.dnsLookupTimeMs + ' ms' : (h.dnsStatus || '-')}</td>
+        <td style="color: ${errorColor}; font-size: 0.8rem;">${errorMsg}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderSparklineChart(history) {
+  const canvas = document.getElementById('details-sparkline');
+  const statsLabel = document.getElementById('chart-latency-stats');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+
+  if (!history || history.length === 0) {
+    if (statsLabel) statsLabel.textContent = 'No latency points recorded yet.';
+    return;
+  }
+
+  // Extract chronologically sorted points (history comes newest first)
+  const points = history.slice(0, 30).reverse().map(h => h.responseTimeMs || 0);
+
+  const minLat = Math.min(...points);
+  const maxLat = Math.max(...points);
+  const avgLat = Math.round(points.reduce((a, b) => a + b, 0) / points.length);
+
+  if (statsLabel) {
+    statsLabel.textContent = `Min: ${minLat} ms | Avg: ${avgLat} ms | Max: ${maxLat} ms`;
+  }
+
+  if (points.length < 2) {
+    // Single bar fallback
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(width / 2 - 15, height - 30, 30, 25);
+    return;
+  }
+
+  const padding = 15;
+  const graphWidth = width - padding * 2;
+  const graphHeight = height - padding * 2;
+  const range = (maxLat - minLat) || 1;
+
+  // Background gradient
+  const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+  gradient.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
+  gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+  // Begin path
+  ctx.beginPath();
+  const step = graphWidth / (points.length - 1);
+
+  points.forEach((val, idx) => {
+    const x = padding + idx * step;
+    const y = height - padding - ((val - minLat) / range) * graphHeight;
+    if (idx === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+
+  // Stroke line
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // Fill area under line
+  ctx.lineTo(padding + (points.length - 1) * step, height - padding);
+  ctx.lineTo(padding, height - padding);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Draw point dots
+  points.forEach((val, idx) => {
+    const x = padding + idx * step;
+    const y = height - padding - ((val - minLat) / range) * graphHeight;
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = val > 2000 ? '#ef4444' : '#38bdf8';
+    ctx.fill();
+  });
 }
 
 function closeDetailsModal() {
@@ -356,7 +593,7 @@ async function fetchAnalytics() {
 
   try {
     const statsList = await Promise.all(monitorsData.map(async m => {
-      const res = await fetch(getApiUrl(`/monitors/${m.id}/statistics`));
+      const res = await fetch(getApiUrl(`/api/monitors/${m.id}/uptime`));
       if (res.ok) {
         const stats = await res.json();
         return { monitor: m, stats };
@@ -392,16 +629,26 @@ function renderStatusPage() {
   }
 
   list.innerHTML = monitorsData.map(m => {
-    const badgeClass = m.currentStatus === 'UP' ? 'badge-up' :
-                       m.currentStatus === 'DEGRADED' ? 'badge-degraded' :
-                       m.currentStatus === 'DOWN' ? 'badge-down' : 'badge-unknown';
+    let badgeClass = 'badge-unknown';
+    let statusLabel = m.currentStatus;
+    if (!m.enabled) {
+      badgeClass = 'badge-paused';
+      statusLabel = 'PAUSED';
+    } else if (m.currentStatus === 'UP') {
+      badgeClass = 'badge-up';
+    } else if (m.currentStatus === 'DEGRADED') {
+      badgeClass = 'badge-degraded';
+    } else if (m.currentStatus === 'DOWN') {
+      badgeClass = 'badge-down';
+    }
+
     return `
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background-color: var(--bg-primary); border-radius: 8px;">
         <div>
           <strong style="font-size: 1rem;">${escapeHtml(m.name)}</strong>
           <div style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(m.url)}</div>
         </div>
-        <span class="badge ${badgeClass}"><span class="dot"></span>${m.currentStatus}</span>
+        <span class="badge ${badgeClass}"><span class="dot"></span>${statusLabel}</span>
       </div>
     `;
   }).join('');
