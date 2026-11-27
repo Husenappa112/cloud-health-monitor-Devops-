@@ -1,6 +1,6 @@
 # Cloud Health Monitor 🌐⚡
 
-> **Production-Grade URL Availability, Health & Performance Monitoring Platform**  
+> **Production-Grade Observability & Availability Platform (Grafana / Datadog-Style Dark Theme)**  
 > *Engineered with Java 21, Spring Boot 4, PostgreSQL / H2, Prometheus, Grafana, Alertmanager, Docker, Kubernetes, Vercel & Render.*
 
 ---
@@ -15,27 +15,37 @@
 
 ## 🚀 Overview
 
-**Cloud Health Monitor** is an enterprise-grade URL availability and infrastructure observability platform. It allows users to register any publicly accessible HTTP/HTTPS URL (e.g., `https://google.com`, `https://github.com`, or custom microservice REST APIs) and continuously monitor availability, latency, DNS resolution, and SSL certificates across global networks.
+**Cloud Health Monitor** is an enterprise-grade synthetic observability and URL availability platform inspired by modern Datadog and Grafana dark interfaces. It empowers SREs, DevOps engineers, and full-stack developers to register publicly accessible HTTP/HTTPS services (e.g. `https://google.com`, `https://github.com`, custom APIs) and continuously monitor availability, latency percentiles (P50, P90, P95, P99), DNS lookup duration, SSL/TLS certificate chains, and incident lifecycles across distributed networks.
 
 ### Key Capabilities
-- **Real-Time Health Engine:** Automated background scheduler checks registered targets every 30 to 300 seconds.
+- **Grafana-Style Observability UI:** High-density dark charcoal aesthetic (`#080c14`, `#161b22`, subtle `#30363d` panel borders) designed for mission-critical monitoring wallboards and NOC consoles.
+- **10 Dedicated Observability Views:**
+  1. **Overview:** High-level system KPIs, live monitor telemetry, HTTP status distribution bar, and active alert feeds.
+  2. **Monitors:** Complete registered service inventory with live search, status filtering (ALL, UP, DEGRADED, DOWN, PAUSED), custom sorting, and per-monitor actions (Immediate Re-check, Pause/Resume, Parameter Edit, Deletion, and 14-Metric Deep Inspection).
+  3. **HTTP Insights:** Aggregated synthetic probe metrics, HTTP status code distribution (2xx/3xx/4xx/5xx), latency percentiles (P50 Median, P90, P95, P99, Min, Max), connection timeouts, socket failures, and DNS/SSL error counts. Explicitly labeled as synthetic probe telemetry rather than visitor traffic.
+  4. **Infrastructure:** Real JVM runtime telemetry (Heap used/max/utilization %, Non-Heap, Available Processors, System Load, Active/Peak Threads, Uptime) and explicit `NOT_CONNECTED` host status clarifying that external targets require an authenticated agent to expose host-level CPU/RAM.
+  5. **Incidents:** Full incident lifecycle state machine (`OPEN` $\rightarrow$ `ACKNOWLEDGED` $\rightarrow$ `RESOLVED`) with severity classification (`CRITICAL`, `WARNING`, `INFO`), operator investigation notes, and downtime SLA duration tracking.
+  6. **Alerts:** Real-time threshold evaluation displaying active alerts (Outages, Latency Degradation > 2000ms, SSL Expiry $\le$ 14 days).
+  7. **SSL Certificates:** Security posture dashboard showing certificate validity, Certificate Authority (CA) issuers, expiration dates, days remaining countdowns, and TLS protocol encryption.
+  8. **Analytics:** Rolling SLA availability compliance (24-hour, 7-day, 30-day uptime %), average latency, and check totals.
+  9. **Event Log:** Chronological audit trail of service state changes, outage detections, operator acknowledgments, and automated recoveries.
+  10. **Settings:** Runtime API base URL configuration, live backend ping testing, and Prometheus/Actuator endpoint direct navigation.
+- **Resilient Frontend Architecture:** Battle-tested API client (`frontend/js/api.js`) that detects Render free-tier cold-starts, handles 502/503/504 gateway responses gracefully, provides configurable timeout aborting, and prevents raw non-JSON syntax errors (`Unexpected token 'T'`).
 - **14 Core Health Metrics:** Captures HTTP status, latency, DNS lookup, SSL days remaining, certificate issuer, TLS validity, connection state, redirect tracking, consecutive failures, 24h/7d/30d uptime %, and downtime duration.
-- **Deep Security & SSRF Protection:** Multi-layer defense-in-depth engine prevents Server-Side Request Forgery by blocking IPv4/IPv6 loopback (`127.0.0.0/8`), RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local/cloud metadata (`169.254.169.254`), and IPv6 ULA/link-local addresses with safe redirect evaluation.
-- **Interactive UI Dashboard:** High-performance responsive web dashboard featuring sparkline latency trend charts, pause/resume controls, parameter editing, status filters, search, and public status pages.
-- **Enterprise Observability:** Native Prometheus metrics scraping (`/actuator/prometheus`), 6 Prometheus alerting rules, Alertmanager routing, and Grafana visualization dashboards.
-- **Automated CI/CD & Orchestration:** Multi-stage Docker containers, Kubernetes 3-replica rolling deployment with liveness/readiness probes, Jenkins Declarative Pipeline, and GitHub Actions CI.
+- **SSRF Defense-in-Depth:** Rejects IPv4/IPv6 loopback (`127.0.0.0/8`), RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local/cloud metadata (`169.254.169.254`), and IPv6 ULA/link-local addresses with safe redirect evaluation.
+- **Dual-Tree Parity:** 100% synchronization across root module and `cloud-health-monitor/` child module, with all 40 unit and integration tests passing.
 
 ---
 
 ## 🏗️ System Architecture
 
 ```
-[ Web Browser / User ]
+[ Web Browser / Operator ]
         │
-        ├── (HTTPS) ──► [ Vercel Production Edge ]
-        │                   └─► Single-Page Dashboard (HTML5 / Canvas / CSS3 / ES6)
+        ├── (HTTPS) ──► [ Vercel Production Global Edge ]
+        │                   └─► High-Density Observability Dashboard (HTML5 / CSS3 / ES6)
         │
-        └── (REST / JSON) ──► [ Spring Boot 4 Engine (Java 21) ]
+        └── (REST / JSON) ──► [ Spring Boot 4 Backend Engine (Java 21) ]
                                     │
                ┌────────────────────┼────────────────────┐
                ▼                    ▼                    ▼
@@ -67,7 +77,7 @@
 | 1 | **Current Status** | Primary health classification | `UP`, `DEGRADED`, `DOWN`, `UNKNOWN` |
 | 2 | **HTTP Status Code** | Response status code received | `200`, `301`, `404`, `500` |
 | 3 | **Response Time** | Total round-trip latency in milliseconds | `42 ms` |
-| 4 | **DNS Status** | Hostname DNS resolution result | `SUCCESS`, `FAILED`, `SKIPPED` |
+| 4 | **DNS Status** | Hostname DNS resolution result | `RESOLVED`, `FAILED`, `SKIPPED` |
 | 5 | **DNS Lookup Time** | Duration required for DNS resolution | `12 ms` |
 | 6 | **Connection Status** | TCP socket & handshake status | `CONNECTED`, `TIMED_OUT`, `SSRF_BLOCKED` |
 | 7 | **TLS/SSL Validity** | Whether certificate is valid & trusted | `true` / `false` |
@@ -86,7 +96,7 @@
 - **Backend:** Java 21, Spring Boot 4.1.2, Spring Data JPA, Hibernate ORM 7.x, Micrometer
 - **Security:** Custom SSRF Validator with CIDR matching, InetAddress resolution, and Redirect.NEVER enforcement
 - **Database:** PostgreSQL (Production / Render) and H2 in-memory (Test & Local Development)
-- **Frontend:** Responsive HTML5, Canvas API sparklines, Vanilla ES6 JavaScript, Modern CSS3
+- **Frontend:** Responsive HTML5, High-density CSS3 design system, Resilient Vanilla ES6 API client
 - **Observability:** Prometheus, Grafana, Alertmanager, Micrometer Prometheus Exporter
 - **Containerization & Orchestration:** Docker multi-stage build, Kubernetes (3 replicas, NodePort 30081)
 - **CI/CD Automation:** Jenkins Declarative Pipeline, GitHub Actions CI
@@ -99,60 +109,20 @@
 ### Prerequisites
 - JDK 21 or higher
 - Maven 3.9+ (or use included `./mvnw`)
-- Docker Desktop (optional, for container execution)
+- Git
 
-### 1. Clone & Build
+### Build & Run Locally
 ```bash
+# Clone the repository
 git clone https://github.com/Husenappa112/cloud-health-monitor-Devops-.git
 cd cloud-health-monitor-Devops-
 git checkout develop
-```
 
-### 2. Run Automated Tests
-```bash
-# Execute full test suite (40 unit, integration, and security tests)
-./mvnw test
-```
+# Run the test suite (40 tests)
+./mvnw clean test
 
-### 3. Run Locally
-```bash
+# Run the application
 ./mvnw spring-boot:run
 ```
-The application starts at:
-- **Web Dashboard:** [http://localhost:8081](http://localhost:8081)
-- **REST API:** `http://localhost:8081/api/monitors`
-- **Prometheus Metrics:** `http://localhost:8081/actuator/prometheus`
-- **Application Health:** `http://localhost:8081/health`
 
----
-
-## 🧪 Testing Summary
-
-The project includes 40 comprehensive automated test cases:
-- `CloudHealthMonitorApplicationTests`: Application context boot validation.
-- `ApiIntegrationTest`: Embedded server REST endpoints, `/health`, registry lifecycle.
-- `UrlMonitorIntegrationTest`: URL registration, URL auto-normalization, pause/resume, edit, overview, and statistics.
-- `SsrfValidatorTest`: SSRF loopback, 10.x, 172.16.x, 192.168.x, 169.254.x, IPv6, port validation, and protocol restriction.
-
----
-
-## 📜 Documentation Directory
-
-| Document | Purpose |
-|---|---|
-| [PROJECT_REPORT.md](PROJECT_REPORT.md) | Comprehensive engineering and academic project report |
-| [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) | Deep-dive architectural blueprints and diagrams |
-| [API_DOCUMENTATION.md](API_DOCUMENTATION.md) | OpenAPI REST specification with payloads and status codes |
-| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Entity relational models, indices, and schema definitions |
-| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Step-by-step production rollout guide (Vercel, Render, K8s) |
-| [SECURITY_DOCUMENTATION.md](SECURITY_DOCUMENTATION.md) | SSRF prevention architecture and threat models |
-| [TESTING_REPORT.md](TESTING_REPORT.md) | 40-test execution audit, test results, and coverage metrics |
-| [USER_GUIDE.md](USER_GUIDE.md) | Operations manual and user dashboard guide |
-| [PHASE_COMPLETION_REPORT.md](PHASE_COMPLETION_REPORT.md) | Project sign-off and milestone delivery handover |
-
----
-
-## 👤 Author & Maintainer
-- **Engineer:** Husenappa
-- **Repository:** [Husenappa112/cloud-health-monitor-Devops-](https://github.com/Husenappa112/cloud-health-monitor-Devops-)
-- **Branch:** `develop`
+Access the dashboard locally at `http://localhost:8081` or inspect Prometheus metrics at `http://localhost:8081/actuator/prometheus`.

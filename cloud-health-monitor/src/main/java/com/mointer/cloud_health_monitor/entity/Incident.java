@@ -4,7 +4,8 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 /**
- * Represents an outage or degradation incident associated with a monitored service.
+ * Represents an outage, degradation, or security incident associated with a monitored service.
+ * Supports full lifecycle: OPEN -> ACKNOWLEDGED -> RESOLVED.
  */
 @Entity
 @Table(name = "incidents", indexes = {
@@ -28,10 +29,22 @@ public class Incident {
     private String incidentType;
 
     @Column(nullable = false, length = 20)
-    private String status = "OPEN"; // OPEN, RESOLVED
+    private String severity = "CRITICAL"; // CRITICAL, WARNING, INFO
+
+    @Column(nullable = false, length = 20)
+    private String status = "OPEN"; // OPEN, ACKNOWLEDGED, RESOLVED
+
+    @Column(name = "title", length = 255)
+    private String title;
 
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;
+
+    @Column(name = "last_occurrence")
+    private Instant lastOccurrence;
+
+    @Column(name = "acknowledged_at")
+    private Instant acknowledgedAt;
 
     @Column(name = "resolved_at")
     private Instant resolvedAt;
@@ -42,6 +55,9 @@ public class Incident {
     @Column(name = "root_cause", length = 1000)
     private String rootCause;
 
+    @Column(name = "resolution_notes", length = 1000)
+    private String resolutionNotes;
+
     public Incident() {}
 
     public Incident(Long serviceId, String serviceName, String incidentType, String rootCause) {
@@ -50,7 +66,30 @@ public class Incident {
         this.incidentType = incidentType;
         this.rootCause = rootCause;
         this.status = "OPEN";
+        this.severity = incidentType != null && incidentType.contains("DEGRADED") ? "WARNING" : "CRITICAL";
+        this.title = serviceName + " — " + incidentType;
         this.startedAt = Instant.now();
+        this.lastOccurrence = this.startedAt;
+    }
+
+    public Incident(Long serviceId, String serviceName, String incidentType, String rootCause, String severity, String title) {
+        this.serviceId = serviceId;
+        this.serviceName = serviceName;
+        this.incidentType = incidentType;
+        this.rootCause = rootCause;
+        this.status = "OPEN";
+        this.severity = severity != null ? severity : "CRITICAL";
+        this.title = title != null ? title : (serviceName + " — " + incidentType);
+        this.startedAt = Instant.now();
+        this.lastOccurrence = this.startedAt;
+    }
+
+    public void acknowledge(String note) {
+        this.status = "ACKNOWLEDGED";
+        this.acknowledgedAt = Instant.now();
+        if (note != null && !note.isBlank()) {
+            this.rootCause = (this.rootCause != null ? this.rootCause + " | " : "") + "ACK: " + note;
+        }
     }
 
     public void resolve(String resolutionDetails) {
@@ -60,6 +99,7 @@ public class Incident {
             this.durationMs = this.resolvedAt.toEpochMilli() - this.startedAt.toEpochMilli();
         }
         if (resolutionDetails != null && !resolutionDetails.isBlank()) {
+            this.resolutionNotes = resolutionDetails;
             this.rootCause = (this.rootCause != null ? this.rootCause + " | " : "") + resolutionDetails;
         }
     }
@@ -96,6 +136,14 @@ public class Incident {
         this.incidentType = incidentType;
     }
 
+    public String getSeverity() {
+        return severity;
+    }
+
+    public void setSeverity(String severity) {
+        this.severity = severity;
+    }
+
     public String getStatus() {
         return status;
     }
@@ -104,12 +152,36 @@ public class Incident {
         this.status = status;
     }
 
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
     public Instant getStartedAt() {
         return startedAt;
     }
 
     public void setStartedAt(Instant startedAt) {
         this.startedAt = startedAt;
+    }
+
+    public Instant getLastOccurrence() {
+        return lastOccurrence;
+    }
+
+    public void setLastOccurrence(Instant lastOccurrence) {
+        this.lastOccurrence = lastOccurrence;
+    }
+
+    public Instant getAcknowledgedAt() {
+        return acknowledgedAt;
+    }
+
+    public void setAcknowledgedAt(Instant acknowledgedAt) {
+        this.acknowledgedAt = acknowledgedAt;
     }
 
     public Instant getResolvedAt() {
@@ -134,5 +206,13 @@ public class Incident {
 
     public void setRootCause(String rootCause) {
         this.rootCause = rootCause;
+    }
+
+    public String getResolutionNotes() {
+        return resolutionNotes;
+    }
+
+    public void setResolutionNotes(String resolutionNotes) {
+        this.resolutionNotes = resolutionNotes;
     }
 }

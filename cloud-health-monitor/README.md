@@ -1,172 +1,128 @@
-# Cloud Health Monitor — Application Availability & Performance Monitoring Platform
+# Cloud Health Monitor 🌐⚡
 
-> **An Enterprise-Grade URL Availability, Latency, SSL & DNS Monitoring Platform** built with **Java 21**, **Spring Boot**, **Spring Data JPA**, **Prometheus**, **Alertmanager**, **Grafana**, **Docker**, and **Kubernetes**.
-
-[![CI Build & Test](https://github.com/Husenappa112/cloud-health-monitor-Devops-/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Husenappa112/cloud-health-monitor-Devops-/actions/workflows/ci.yml)
-[![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-green.svg)](https://spring.io/projects/spring-boot)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-Hardened%20(UID%20100)-blue.svg)](https://kubernetes.io/)
+> **Production-Grade Observability & Availability Platform (Grafana / Datadog-Style Dark Theme)**  
+> *Engineered with Java 21, Spring Boot 4, PostgreSQL / H2, Prometheus, Grafana, Alertmanager, Docker, Kubernetes, Vercel & Render.*
 
 ---
 
-## 1. Executive Overview
-
-**Cloud Health Monitor** is a production-oriented observability and uptime monitoring platform designed to continuously verify the availability, response time, SSL validity, and DNS resolution of critical web services and APIs.
-
-Users can register publicly accessible endpoints (e.g., `https://google.com`, `https://github.com`, microservice APIs) and monitor them through:
-1. **Interactive SaaS Web Dashboard:** Single-page responsive interface served directly from the Spring Boot application (`/index.html`).
-2. **RESTful APIs:** Complete CRUD endpoints for monitors, check history, uptime analytics, and incident lifecycle management (`/monitors`, `/incidents`).
-3. **Enterprise DevOps & SRE Integration:** Native Prometheus scrape metrics (`/actuator/prometheus`), Alertmanager Gmail notifications, and pre-provisioned Grafana dashboards.
-4. **Hardened Kubernetes Infrastructure:** Zero-trust container security (non-root UID 100, read-only root filesystem, dropped capabilities) deployed on Kubernetes.
+## 📌 Live Deployments & Repository
+- **Production Frontend (Vercel):** [https://cloud-health-monitor-ui.vercel.app](https://cloud-health-monitor-ui.vercel.app)
+- **Production Backend (Render):** `https://cloud-health-monitor-devops.onrender.com`
+- **GitHub Repository:** [Husenappa112/cloud-health-monitor-Devops-](https://github.com/Husenappa112/cloud-health-monitor-Devops-)
+- **Active Working Branch:** `develop`
 
 ---
 
-## 2. Key Platform Features
+## 🚀 Overview
 
-- **Multi-Protocol URL Health Engine:** Uses Java 21 `HttpClient` with bounded connect and request timeouts (3s/5s) to test target endpoints without thread leaks.
-- **SSL Certificate Expiry Tracking:** Inspects peer TLS certificates, calculates exact days until expiration, and triggers proactive warnings when `< 7 days`.
-- **DNS Resolution & Latency Inspection:** Resolves hostnames and measures DNS query duration in milliseconds, detecting `UnknownHostException` early.
-- **Enterprise SSRF Protection:** Prevents Server-Side Request Forgery by rejecting loopback (`127.0.0.1`), private RFC 1918 subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), cloud metadata endpoints (`169.254.169.254`), and forbidden schemes.
-- **Automated Background Scheduler:** Multi-threaded bounded thread pool (10 workers) that polls services according to configurable intervals (30s, 60s, 120s, 300s).
-- **Incident Lifecycle Management:** Automatically opens incidents on transition to `DOWN` and auto-resolves with duration tracking upon recovery to `UP`.
-- **Uptime & Latency Analytics:** Calculates real-time 24-hour, 7-day, and 30-day uptime percentages and min/max/avg latency from persisted JPA check logs.
-- **Prometheus Metrics & Alert Rules:** Custom Micrometer gauges (`monitored_service_up`, `monitored_service_response_time_seconds`, `monitored_service_ssl_expiry_days`) with 6 Alertmanager rules.
-- **Interactive Web Dashboard:** Modern dark-themed dashboard with live status cards, endpoint tables, search filters, modal detail views, and a public status page.
+**Cloud Health Monitor** is an enterprise-grade synthetic observability and URL availability platform inspired by modern Datadog and Grafana dark interfaces. It empowers SREs, DevOps engineers, and full-stack developers to register publicly accessible HTTP/HTTPS services (e.g. `https://google.com`, `https://github.com`, custom APIs) and continuously monitor availability, latency percentiles (P50, P90, P95, P99), DNS lookup duration, SSL/TLS certificate chains, and incident lifecycles across distributed networks.
+
+### Key Capabilities
+- **Grafana-Style Observability UI:** High-density dark charcoal aesthetic (`#080c14`, `#161b22`, subtle `#30363d` panel borders) designed for mission-critical monitoring wallboards and NOC consoles.
+- **10 Dedicated Observability Views:**
+  1. **Overview:** High-level system KPIs, live monitor telemetry, HTTP status distribution bar, and active alert feeds.
+  2. **Monitors:** Complete registered service inventory with live search, status filtering (ALL, UP, DEGRADED, DOWN, PAUSED), custom sorting, and per-monitor actions (Immediate Re-check, Pause/Resume, Parameter Edit, Deletion, and 14-Metric Deep Inspection).
+  3. **HTTP Insights:** Aggregated synthetic probe metrics, HTTP status code distribution (2xx/3xx/4xx/5xx), latency percentiles (P50 Median, P90, P95, P99, Min, Max), connection timeouts, socket failures, and DNS/SSL error counts. Explicitly labeled as synthetic probe telemetry rather than visitor traffic.
+  4. **Infrastructure:** Real JVM runtime telemetry (Heap used/max/utilization %, Non-Heap, Available Processors, System Load, Active/Peak Threads, Uptime) and explicit `NOT_CONNECTED` host status clarifying that external targets require an authenticated agent to expose host-level CPU/RAM.
+  5. **Incidents:** Full incident lifecycle state machine (`OPEN` $\rightarrow$ `ACKNOWLEDGED` $\rightarrow$ `RESOLVED`) with severity classification (`CRITICAL`, `WARNING`, `INFO`), operator investigation notes, and downtime SLA duration tracking.
+  6. **Alerts:** Real-time threshold evaluation displaying active alerts (Outages, Latency Degradation > 2000ms, SSL Expiry $\le$ 14 days).
+  7. **SSL Certificates:** Security posture dashboard showing certificate validity, Certificate Authority (CA) issuers, expiration dates, days remaining countdowns, and TLS protocol encryption.
+  8. **Analytics:** Rolling SLA availability compliance (24-hour, 7-day, 30-day uptime %), average latency, and check totals.
+  9. **Event Log:** Chronological audit trail of service state changes, outage detections, operator acknowledgments, and automated recoveries.
+  10. **Settings:** Runtime API base URL configuration, live backend ping testing, and Prometheus/Actuator endpoint direct navigation.
+- **Resilient Frontend Architecture:** Battle-tested API client (`frontend/js/api.js`) that detects Render free-tier cold-starts, handles 502/503/504 gateway responses gracefully, provides configurable timeout aborting, and prevents raw non-JSON syntax errors (`Unexpected token 'T'`).
+- **14 Core Health Metrics:** Captures HTTP status, latency, DNS lookup, SSL days remaining, certificate issuer, TLS validity, connection state, redirect tracking, consecutive failures, 24h/7d/30d uptime %, and downtime duration.
+- **SSRF Defense-in-Depth:** Rejects IPv4/IPv6 loopback (`127.0.0.0/8`), RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local/cloud metadata (`169.254.169.254`), and IPv6 ULA/link-local addresses with safe redirect evaluation.
+- **Dual-Tree Parity:** 100% synchronization across root module and `cloud-health-monitor/` child module, with all 40 unit and integration tests passing.
 
 ---
 
-## 3. Architecture
+## 🏗️ System Architecture
 
 ```
-                                  ┌────────────────────────┐
-                                  │   Public Endpoints     │
-                                  │ Google, GitHub, APIs   │
-                                  └──────────▲─────────────┘
-                                             │ HTTP/HTTPS GET, SSL, DNS
-┌────────────────────────────────────────────┼────────────────────────────────────────┐
-│                      Cloud Health Monitor Platform                                  │
-│                                            │                                        │
-│  ┌───────────────────────┐    ┌────────────┴──────────┐    ┌─────────────────────┐  │
-│  │   Responsive Web UI   │◄───┤ Scheduled Monitoring  ├───►│ Spring Data JPA     │  │
-│  │   (Static Dashboard)  │    │ Engine (10 Threads)   │    │ H2 / PostgreSQL     │  │
-│  └───────────▲───────────┘    └────────────┬──────────┘    └─────────────────────┘  │
-│              │                             │                                        │
-│  ┌───────────┴───────────┐                 │               ┌─────────────────────┐  │
-│  │ REST APIs (/monitors) │                 ├──────────────►│ Incident Manager    │  │
-│  └───────────────────────┘                 │               │ (Auto-Create/Resolve│  │
-│                                            ▼               └─────────────────────┘  │
-│                               ┌──────────────────────┐                              │
-│                               │ Micrometer Export    │                              │
-│                               │ /actuator/prometheus │                              │
-│                               └──────────┬───────────┘                              │
-└──────────────────────────────────────────┼──────────────────────────────────────────┘
-                                           │ Scrape (15s)
-                         ┌─────────────────┴─────────────────┐
-                         │       Prometheus (Port 9090)      │
-                         └───────┬───────────────────┬───────┘
-                                 │ Alerts            │ Dashboards
-                         ┌───────▼─────────┐ ┌───────▼─────────┐
-                         │ Alertmanager    │ │ Grafana         │
-                         │ (Gmail Alerts)  │ │ (Port 3000)     │
-                         └─────────────────┘ └─────────────────┘
+[ Web Browser / Operator ]
+        │
+        ├── (HTTPS) ──► [ Vercel Production Global Edge ]
+        │                   └─► High-Density Observability Dashboard (HTML5 / CSS3 / ES6)
+        │
+        └── (REST / JSON) ──► [ Spring Boot 4 Backend Engine (Java 21) ]
+                                    │
+               ┌────────────────────┼────────────────────┐
+               ▼                    ▼                    ▼
+     [ SSRF Validator ]    [ DNS Inspector ]    [ SSL Inspector ]
+               │                    │                    │
+               └────────────────────┬────────────────────┘
+                                    │
+                                    ▼
+                        [ Java 21 HTTP/2 Client ]
+                                    │
+                                    ▼
+                       [ Public Monitored Target ]
+                                    │
+                                    ▼
+       ┌────────────────────────────┴────────────────────────────┐
+       ▼                                                         ▼
+[ PostgreSQL / H2 Database ]                              [ Prometheus / Grafana ]
+  - monitored_services                                      - monitored_service_up
+  - health_check_records                                    - monitored_service_response_time_seconds
+  - incidents                                               - monitored_service_ssl_expiry_days
 ```
 
 ---
 
-## 4. REST API Quick Reference
+## 📊 Captured Health & Performance Metrics (14 Total)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/monitors` | Register a new monitored URL (with SSRF validation) |
-| `GET` | `/monitors` | List all monitors with live status and latency |
-| `GET` | `/monitors/{id}` | Get details of a single monitor |
-| `PUT` | `/monitors/{id}` | Update monitor name, URL, or check interval |
-| `DELETE` | `/monitors/{id}` | Delete a monitor |
-| `POST` | `/monitors/{id}/check` | Force an immediate out-of-band health check |
-| `GET` | `/monitors/{id}/history` | Retrieve the 50 most recent check logs |
-| `GET` | `/monitors/{id}/statistics`| Retrieve 24h/7d/30d uptime & latency stats |
-| `GET` | `/monitors/overview` | Platform-wide aggregate metrics (UP/DOWN counts, uptime %) |
-| `GET` | `/incidents` | List outage & degradation incidents |
-| `POST` | `/incidents/{id}/resolve`| Manually resolve an open incident |
-| `GET` | `/health` | Application health ping (backward compatible) |
-| `GET` | `/actuator/prometheus` | Prometheus metrics scrape endpoint |
-
-For complete request bodies, error schemas, and curl examples, see [API_DOCUMENTATION.md](file:///c:/Users/hhuse/Downloads/cloud-health-monitor/API_DOCUMENTATION.md).
+| # | Metric Name | Description | Output Example |
+|---|---|---|---|
+| 1 | **Current Status** | Primary health classification | `UP`, `DEGRADED`, `DOWN`, `UNKNOWN` |
+| 2 | **HTTP Status Code** | Response status code received | `200`, `301`, `404`, `500` |
+| 3 | **Response Time** | Total round-trip latency in milliseconds | `42 ms` |
+| 4 | **DNS Status** | Hostname DNS resolution result | `RESOLVED`, `FAILED`, `SKIPPED` |
+| 5 | **DNS Lookup Time** | Duration required for DNS resolution | `12 ms` |
+| 6 | **Connection Status** | TCP socket & handshake status | `CONNECTED`, `TIMED_OUT`, `SSRF_BLOCKED` |
+| 7 | **TLS/SSL Validity** | Whether certificate is valid & trusted | `true` / `false` |
+| 8 | **SSL Days Remaining** | Days before TLS certificate expires | `84 days` |
+| 9 | **SSL Expiry Date** | Exact timestamp of certificate expiration | `2027-02-19T00:00:00Z` |
+| 10 | **SSL Issuer** | Certificate Authority / CN issuer | `GTS CA 1C3` |
+| 11 | **Redirect Count** | Number of HTTP redirects followed | `1` (e.g. `http` $\rightarrow$ `https`) |
+| 12 | **Final URL** | Destination URL after safe redirects | `https://www.google.com` |
+| 13 | **Consecutive Failures** | Consecutive failed check attempts | `0` (resets on `UP`) |
+| 14 | **Uptime & Downtime** | Rolling 24h/7d/30d uptime % and downtime seconds | `99.98%`, `0s downtime` |
 
 ---
 
-## 5. Getting Started & Local Setup
+## 🛠️ Technology Stack
+
+- **Backend:** Java 21, Spring Boot 4.1.2, Spring Data JPA, Hibernate ORM 7.x, Micrometer
+- **Security:** Custom SSRF Validator with CIDR matching, InetAddress resolution, and Redirect.NEVER enforcement
+- **Database:** PostgreSQL (Production / Render) and H2 in-memory (Test & Local Development)
+- **Frontend:** Responsive HTML5, High-density CSS3 design system, Resilient Vanilla ES6 API client
+- **Observability:** Prometheus, Grafana, Alertmanager, Micrometer Prometheus Exporter
+- **Containerization & Orchestration:** Docker multi-stage build, Kubernetes (3 replicas, NodePort 30081)
+- **CI/CD Automation:** Jenkins Declarative Pipeline, GitHub Actions CI
+- **Cloud Hosting:** Vercel (Frontend CDN), Render (Containerized Backend + Managed Postgres)
+
+---
+
+## ⚡ Quickstart — Local Development
 
 ### Prerequisites
-- **JDK 21** or **25**
-- **Maven 3.9+** (or use included `./mvnw`)
-- **Docker Desktop** (with Kubernetes enabled)
+- JDK 21 or higher
+- Maven 3.9+ (or use included `./mvnw`)
+- Git
 
-### Running Locally with Maven
+### Build & Run Locally
 ```bash
 # Clone the repository
-git clone -b develop https://github.com/Husenappa112/cloud-health-monitor-Devops-.git
-cd cloud-health-monitor
+git clone https://github.com/Husenappa112/cloud-health-monitor-Devops-.git
+cd cloud-health-monitor-Devops-
+git checkout develop
 
-# Run tests
+# Run the test suite (40 tests)
 ./mvnw clean test
 
-# Start the Spring Boot application
+# Run the application
 ./mvnw spring-boot:run
 ```
 
-Once started:
-- **Web Dashboard:** Open [http://localhost:8081](http://localhost:8081) in your browser.
-- **REST API:** `curl http://localhost:8081/monitors`
-- **Prometheus Metrics:** [http://localhost:8081/actuator/prometheus](http://localhost:8081/actuator/prometheus)
-- **H2 Console:** [http://localhost:8081/h2-console](http://localhost:8081/h2-console) (JDBC URL: `jdbc:h2:mem:cloudhealth`, User: `sa`)
-
----
-
-## 6. Kubernetes Security & Deployment
-
-The application is deployed on Kubernetes using a hardened pod security context complying with the Kubernetes Restricted Pod Security Standard:
-
-```bash
-# Apply Kubernetes Deployment & NodePort Service
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-
-# Verify pods (3 replicas running as non-root UID 100)
-kubectl get pods -l app=cloud-health-monitor
-kubectl get svc cloud-health-monitor
-```
-
-- **NodePort Access:** [http://localhost:30081](http://localhost:30081)
-- **Security Audit:** Run non-root check:
-  ```bash
-  kubectl exec -it deployment/cloud-health-monitor -- id
-  # Output: uid=100(guest) gid=101(guest) groups=101(guest)
-  ```
-
----
-
-## 7. Prometheus, Alertmanager & Grafana Monitoring
-
-1. **Prometheus:** Running at [http://localhost:9090](http://localhost:9090) scraping `/actuator/prometheus` every 15 seconds.
-2. **Alertmanager:** Running at [http://localhost:9093](http://localhost:9093) with 6 active rules:
-   - `MonitoredServiceDown` (critical)
-   - `MonitoredServiceLatencyHigh` (warning)
-   - `MonitoredServiceDegraded` (warning)
-   - `SslCertificateExpiringSoon` (warning)
-   - `SslCertificateExpired` (critical)
-   - `DnsLookupLatencyHigh` (warning)
-3. **Grafana:** Running at [http://localhost:3000](http://localhost:3000) (admin / admin).
-
----
-
-## 8. Complete Project Documentation
-
-| Document | Purpose |
-|---|---|
-| [API_DOCUMENTATION.md](file:///c:/Users/hhuse/Downloads/cloud-health-monitor/API_DOCUMENTATION.md) | Full REST API reference with request/response schemas |
-| [SECURITY_REPORT.md](file:///c:/Users/hhuse/Downloads/cloud-health-monitor/SECURITY_REPORT.md) | SSRF security analysis & Kubernetes container hardening audit |
-| [DEPLOYMENT_ARCHITECTURE.md](file:///c:/Users/hhuse/Downloads/cloud-health-monitor/DEPLOYMENT_ARCHITECTURE.md) | Multi-tier deployment architecture and network topologies |
-| [OPERATIONS_RUNBOOK.md](file:///c:/Users/hhuse/Downloads/cloud-health-monitor/OPERATIONS_RUNBOOK.md) | Step-by-step SRE operations, disaster recovery, and rollback procedures |
-| [PROJECT_DEMO_GUIDE.md](file:///c:/Users/hhuse/Downloads/cloud-health-monitor/PROJECT_DEMO_GUIDE.md) | End-to-end interview presentation script and walkthrough guide |
-| [DEPLOYMENT_ACCEPTANCE_REPORT.md](file:///c:/Users/hhuse/Downloads/cloud-health-monitor/DEPLOYMENT_ACCEPTANCE_REPORT.md) | Formal verification audit and acceptance signoff |
+Access the dashboard locally at `http://localhost:8081` or inspect Prometheus metrics at `http://localhost:8081/actuator/prometheus`.

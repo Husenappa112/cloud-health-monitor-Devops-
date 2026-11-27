@@ -1,10 +1,25 @@
 /**
  * Cloud Health Monitor — Runtime API Configuration
- *
- * For Vercel hosting:
- * Set window.__API_BASE_URL__ to your deployed Render backend URL,
- * for example: "https://cloud-health-monitor-backend.onrender.com"
- *
- * When left empty (""), it defaults to the same origin (local development / Spring Boot embedded).
+ * 
+ * Auto-detects production Vercel hosting and routes requests to the deployed Render backend:
+ * Backend: https://cloud-health-monitor-devops.onrender.com
+ * Frontend: https://cloud-health-monitor-ui.vercel.app
+ * 
+ * In local development (localhost) or when served directly from Spring Boot,
+ * it uses relative endpoints ("").
  */
-window.__API_BASE_URL__ = window.__API_BASE_URL__ || "";
+
+(function () {
+  'use strict';
+
+  const isVercel = window.location.hostname.includes('vercel.app');
+  const defaultRenderBackend = 'https://cloud-health-monitor-devops.onrender.com';
+
+  if (!window.__API_BASE_URL__) {
+    if (isVercel) {
+      window.__API_BASE_URL__ = defaultRenderBackend;
+    } else {
+      window.__API_BASE_URL__ = '';
+    }
+  }
+})();

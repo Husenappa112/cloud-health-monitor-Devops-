@@ -10,9 +10,11 @@ import java.util.Map;
 
 /**
  * REST controller for monitoring outage and degradation incidents.
+ * Supports full lifecycle: OPEN -> ACKNOWLEDGED -> RESOLVED.
+ * Mapped to both /incidents and /api/incidents.
  */
 @RestController
-@RequestMapping("/incidents")
+@RequestMapping({"/incidents", "/api/incidents"})
 public class IncidentController {
 
     private final IncidentRepository incidentRepository;
@@ -33,6 +35,16 @@ public class IncidentController {
     public Incident getIncident(@PathVariable Long id) {
         return incidentRepository.findById(id)
                 .orElseThrow(() -> new ServiceNotFoundException("Incident with ID " + id));
+    }
+
+    @PostMapping("/{id}/acknowledge")
+    public Incident acknowledgeIncident(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+        Incident incident = incidentRepository.findById(id)
+                .orElseThrow(() -> new ServiceNotFoundException("Incident with ID " + id));
+
+        String note = (body != null && body.containsKey("note")) ? body.get("note") : "Acknowledged by operator";
+        incident.acknowledge(note);
+        return incidentRepository.save(incident);
     }
 
     @PostMapping("/{id}/resolve")
