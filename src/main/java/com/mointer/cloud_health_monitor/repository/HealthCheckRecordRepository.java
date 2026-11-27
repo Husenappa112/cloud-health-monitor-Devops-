@@ -19,6 +19,8 @@ public interface HealthCheckRecordRepository extends JpaRepository<HealthCheckRe
 
     List<HealthCheckRecord> findByServiceIdAndCheckedAtAfterOrderByCheckedAtAsc(Long serviceId, Instant after);
 
+    List<HealthCheckRecord> findByCheckedAtAfterOrderByCheckedAtAsc(Instant after);
+
     long countByServiceIdAndCheckedAtAfter(Long serviceId, Instant after);
 
     long countByServiceIdAndStatusAndCheckedAtAfter(Long serviceId, String status, Instant after);

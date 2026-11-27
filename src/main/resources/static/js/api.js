@@ -1,50 +1,109 @@
 /**
- * Cloud Health Monitor — Resilient API Client
+ * Cloud Health Monitor — Resilient Observability API Client
  * 
- * Provides robust error handling, Render cold-start detection, safe non-JSON response parsing,
- * configurable timeout handling, and unified methods for all monitoring endpoints.
+ * Features:
+ * - Robust preset management (PRODUCTION, LOCAL, CUSTOM)
+ * - Self-healing domain sanitization (prevents monitored URLs from being used as backend)
+ * - Finite state machine: CONNECTED, CONNECTING, RECONNECTING, DISCONNECTED
+ * - Bounded exponential backoff retry for Render cold starts
+ * - Safe JSON parsing with MIME-type pre-validation to eliminate SyntaxErrors
+ * - Unified endpoints for Monitors, Incidents, Alerts, Visualizations, Dashboards, and Telemetry
  */
 
 (function (window) {
   'use strict';
 
+  const TARGET_BLACKLIST = [
+    'google.com', 'google.co.in', 'github.com', 'amazon.com', 'amazon.in',
+    'microsoft.com', 'apple.com', 'example.com', 'yahoo.com', 'bing.com'
+  ];
+
   class ApiClient {
     constructor() {
-      this.timeoutMs = 12000; // 12 seconds request timeout
-      this.isWarmingUp = false;
-      this.onWarmupStateChange = null;
+      this.timeoutMs = 12000;
+      this.connectionState = 'DISCONNECTED'; // CONNECTED, CONNECTING, RECONNECTING, DISCONNECTED
+      this.onConnectionStateChange = null;
+      this.retryAttempts = 0;
+      this.maxRetryAttempts = 5;
+      this.retryTimer = null;
+      this.activeBackendPreset = this.getStoredPreset();
     }
 
-    /**
-     * Resolves the effective backend base URL:
-     * 1. localStorage 'CHM_API_BASE_URL' (manual user override in UI)
-     * 2. window.__API_BASE_URL__ (from config.js or inline script)
-     * 3. Fallback: window.location.origin (for same-origin / embedded mode)
-     */
-    getBaseUrl() {
+    getStoredPreset() {
       try {
-        const stored = localStorage.getItem('CHM_API_BASE_URL');
-        if (stored && stored.trim() !== '') {
-          return stored.trim().replace(/\/+$/, '');
+        const stored = localStorage.getItem('CHM_BACKEND_PRESET');
+        if (stored && ['PRODUCTION', 'LOCAL', 'CUSTOM'].includes(stored)) {
+          return stored;
+        }
+      } catch (e) {}
+      return (window.location.hostname.includes('vercel.app')) ? 'PRODUCTION' : 'LOCAL';
+    }
+
+    setPreset(preset, customUrl = '') {
+      try {
+        if (preset === 'PRODUCTION') {
+          localStorage.setItem('CHM_BACKEND_PRESET', 'PRODUCTION');
+          localStorage.removeItem('CHM_API_BASE_URL');
+          this.activeBackendPreset = 'PRODUCTION';
+        } else if (preset === 'LOCAL') {
+          localStorage.setItem('CHM_BACKEND_PRESET', 'LOCAL');
+          localStorage.removeItem('CHM_API_BASE_URL');
+          this.activeBackendPreset = 'LOCAL';
+        } else if (preset === 'CUSTOM') {
+          const validated = this.validateBackendUrl(customUrl);
+          localStorage.setItem('CHM_BACKEND_PRESET', 'CUSTOM');
+          localStorage.setItem('CHM_API_BASE_URL', validated);
+          this.activeBackendPreset = 'CUSTOM';
         }
       } catch (e) {
-        // localStorage might be unavailable in restricted environments
+        console.error('Storage error:', e);
       }
-
-      if (typeof window.__API_BASE_URL__ === 'string' && window.__API_BASE_URL__.trim() !== '') {
-        return window.__API_BASE_URL__.trim().replace(/\/+$/, '');
-      }
-
-      // Default to empty string for relative same-origin requests
-      return '';
+      this.resetRetry();
+      this.setConnectionState('CONNECTING', 'Switching backend endpoint...');
     }
 
-    setBaseUrl(url) {
-      if (url && url.trim() !== '') {
-        localStorage.setItem('CHM_API_BASE_URL', url.trim().replace(/\/+$/, ''));
-      } else {
-        localStorage.removeItem('CHM_API_BASE_URL');
+    validateBackendUrl(url) {
+      if (!url || typeof url !== 'string' || url.trim() === '') {
+        throw new Error('Backend URL cannot be empty');
       }
+      let cleaned = url.trim().replace(/\/+$/, '');
+      if (!cleaned.toLowerCase().startsWith('http://') && !cleaned.toLowerCase().startsWith('https://')) {
+        cleaned = 'https://' + cleaned;
+      }
+      const lower = cleaned.toLowerCase();
+      for (const domain of TARGET_BLACKLIST) {
+        if (lower.includes(domain)) {
+          throw new Error(`"${domain}" is a monitored website target, NOT a Cloud Health Monitor backend API server! To monitor this site, use "+ Add Monitor".`);
+        }
+      }
+      return cleaned;
+    }
+
+    getBaseUrl() {
+      const preset = this.getStoredPreset();
+      if (preset === 'PRODUCTION') {
+        return (window.CHM_CONFIG && window.CHM_CONFIG.PRODUCTION_BACKEND) || 'https://cloud-health-monitor-devops.onrender.com';
+      }
+      if (preset === 'LOCAL') {
+        return (window.CHM_CONFIG && window.CHM_CONFIG.LOCAL_BACKEND) || 'http://localhost:8081';
+      }
+
+      // CUSTOM preset
+      try {
+        const custom = localStorage.getItem('CHM_API_BASE_URL');
+        if (custom && custom.trim() !== '') {
+          // Check for accidental blacklisted target
+          const lower = custom.toLowerCase();
+          if (TARGET_BLACKLIST.some(d => lower.includes(d))) {
+            localStorage.removeItem('CHM_API_BASE_URL');
+            localStorage.setItem('CHM_BACKEND_PRESET', 'PRODUCTION');
+            return 'https://cloud-health-monitor-devops.onrender.com';
+          }
+          return custom.trim().replace(/\/+$/, '');
+        }
+      } catch (e) {}
+
+      return (window.CHM_CONFIG && window.CHM_CONFIG.defaultBackend) || '';
     }
 
     buildUrl(endpoint) {
@@ -53,8 +112,23 @@
       return base ? `${base}${cleanEndpoint}` : cleanEndpoint;
     }
 
+    setConnectionState(state, details = '') {
+      this.connectionState = state;
+      if (typeof this.onConnectionStateChange === 'function') {
+        this.onConnectionStateChange(state, details, this.getBaseUrl());
+      }
+    }
+
+    resetRetry() {
+      this.retryAttempts = 0;
+      if (this.retryTimer) {
+        clearTimeout(this.retryTimer);
+        this.retryTimer = null;
+      }
+    }
+
     /**
-     * Resilient fetch wrapper with timeout, cold-start detection, and non-JSON body protection.
+     * Resilient fetch wrapper with MIME-type pre-validation and cold-start backoff.
      */
     async request(endpoint, options = {}) {
       const url = this.buildUrl(endpoint);
@@ -81,87 +155,100 @@
       } catch (err) {
         clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
-          this.setWarmingUp(true, 'Request timed out — backend may be spinning up from cold start.');
-          throw new Error(`Request to ${endpoint} timed out after ${this.timeoutMs / 1000}s. Backend might be starting up.`);
+          this.handleConnectionFailure(`Request timed out after ${this.timeoutMs / 1000}s. Backend might be starting up from cold start.`);
+          throw new Error(`Request timeout: Backend at ${this.getBaseUrl()} took longer than ${this.timeoutMs / 1000}s to respond.`);
         }
-        this.setWarmingUp(true, 'Network connectivity error — attempting reconnection.');
+        this.handleConnectionFailure(`Network error connecting to backend: ${err.message}`);
         throw new Error(`Network error connecting to backend (${url}): ${err.message}`);
       } finally {
         clearTimeout(timeoutId);
       }
 
-      // Check HTTP status and Content-Type
       const contentType = response.headers.get('content-type') || '';
       const isJson = contentType.includes('application/json');
 
-      // Detect Render cold-start / HTML gateway errors (502, 503, 504 or HTML body)
       if (!response.ok) {
-        let errorDetails = `HTTP ${response.status} ${response.statusText}`;
+        let errorMsg = `HTTP ${response.status} ${response.statusText}`;
         if (isJson) {
           try {
-            const jsonErr = await response.json();
-            errorDetails = jsonErr.message || jsonErr.error || JSON.stringify(jsonErr);
-          } catch (_) {
-            // fallback to status text
-          }
+            const errObj = await response.json();
+            errorMsg = errObj.message || errObj.error || JSON.stringify(errObj);
+          } catch (_) {}
         } else {
           try {
-            const rawText = await response.text();
-            // Check for Render spinning up indicators
+            const raw = await response.text();
             if (response.status === 502 || response.status === 503 || response.status === 504 ||
-                rawText.includes('starting') || rawText.includes('Render') || rawText.includes('The page could not be found')) {
-              this.setWarmingUp(true, 'Backend is waking up (Render free tier cold start). Re-querying...');
-              errorDetails = 'Backend is waking up (cold start). Please allow 30-45 seconds.';
+                raw.includes('starting') || raw.includes('Render') || raw.includes('no-server')) {
+              this.handleConnectionFailure('Backend is spinning up (Render free tier cold start).');
+              errorMsg = 'Backend is waking up (cold start). Please allow 30-45 seconds for initialization.';
             } else {
-              errorDetails = rawText.slice(0, 140) || errorDetails;
+              errorMsg = raw.slice(0, 160) || errorMsg;
             }
-          } catch (_) {
-            // ignore
-          }
+          } catch (_) {}
         }
 
-        const httpError = new Error(errorDetails);
-        httpError.status = response.status;
-        throw httpError;
+        const httpErr = new Error(errorMsg);
+        httpErr.status = response.status;
+        throw httpErr;
       }
 
-      // Successful HTTP response: Verify JSON before calling .json() to avoid syntax crash
+      // Successful HTTP 2xx
       if (!isJson) {
-        const textData = await response.text();
-        // Check if response accidentally returned HTML
-        if (textData.trim().startsWith('<')) {
-          this.setWarmingUp(true, 'Received HTML instead of JSON — backend proxy may be initializing.');
-          throw new Error('Received unexpected HTML response instead of JSON. Backend might be restarting.');
+        const text = await response.text();
+        if (text.trim().startsWith('<')) {
+          this.handleConnectionFailure('Received HTML instead of JSON — proxy gateway might be initializing.');
+          throw new Error('Received unexpected HTML response from backend.');
         }
         try {
-          return JSON.parse(textData);
+          const parsed = JSON.parse(text);
+          this.handleConnectionSuccess();
+          return parsed;
         } catch (e) {
-          throw new Error(`Invalid JSON received from ${endpoint}: ${textData.slice(0, 80)}`);
+          throw new Error(`Invalid JSON received: ${text.slice(0, 80)}`);
         }
       }
 
-      // Backend is online and returned valid JSON
-      this.setWarmingUp(false);
-      return await response.json();
+      const data = await response.json();
+      this.handleConnectionSuccess();
+      return data;
     }
 
-    setWarmingUp(isWarming, reason = '') {
-      if (this.isWarmingUp !== isWarming) {
-        this.isWarmingUp = isWarming;
-        if (typeof this.onWarmupStateChange === 'function') {
-          this.onWarmupStateChange(isWarming, reason);
-        }
+    handleConnectionSuccess() {
+      this.resetRetry();
+      if (this.connectionState !== 'CONNECTED') {
+        this.setConnectionState('CONNECTED', 'Backend online and responding');
+      }
+    }
+
+    handleConnectionFailure(reason) {
+      this.retryAttempts++;
+      if (this.retryAttempts <= this.maxRetryAttempts) {
+        const delay = Math.min(30000, Math.pow(2, this.retryAttempts) * 1000); // 2s, 4s, 8s, 16s, 30s
+        this.setConnectionState('RECONNECTING', `${reason} Retrying in ${delay / 1000}s (Attempt ${this.retryAttempts}/${this.maxRetryAttempts})...`);
+      } else {
+        this.setConnectionState('DISCONNECTED', `${reason} Max retry attempts reached. Check backend configuration or test ping in Settings.`);
       }
     }
 
     /* ── High-Level API Methods ────────────────────────────────────────── */
 
-    // System Overview & Stats
+    // Health & System
+    async ping() {
+      try {
+        const start = performance.now();
+        const res = await this.request('/health', { timeoutMs: 6000 });
+        const latency = Math.round(performance.now() - start);
+        return { online: true, latency, data: res };
+      } catch (err) {
+        return { online: false, error: err.message };
+      }
+    }
+
     async getSummary() {
       return this.request('/api/dashboard/summary');
     }
 
-    // Monitors
+    // Monitors CRUD & Lifecycle
     async getMonitors() {
       return this.request('/api/monitors');
     }
@@ -171,47 +258,33 @@
     }
 
     async createMonitor(payload) {
-      return this.request('/api/monitors', {
-        method: 'POST',
-        body: payload
-      });
+      return this.request('/api/monitors', { method: 'POST', body: payload });
     }
 
     async updateMonitor(id, payload) {
-      return this.request(`/api/monitors/${id}`, {
-        method: 'PUT',
-        body: payload
-      });
+      return this.request(`/api/monitors/${id}`, { method: 'PUT', body: payload });
     }
 
     async deleteMonitor(id) {
-      return this.request(`/api/monitors/${id}`, {
-        method: 'DELETE'
-      });
+      return this.request(`/api/monitors/${id}`, { method: 'DELETE' });
     }
 
     async pauseMonitor(id) {
-      return this.request(`/api/monitors/${id}/pause`, {
-        method: 'POST'
-      });
+      return this.request(`/api/monitors/${id}/pause`, { method: 'POST' });
     }
 
     async resumeMonitor(id) {
-      return this.request(`/api/monitors/${id}/resume`, {
-        method: 'POST'
-      });
+      return this.request(`/api/monitors/${id}/resume`, { method: 'POST' });
     }
 
     async triggerCheck(id) {
-      return this.request(`/api/monitors/${id}/check`, {
-        method: 'POST'
-      });
+      return this.request(`/api/monitors/${id}/check`, { method: 'POST' });
     }
 
-    // Incidents
-    async getIncidents(status) {
-      const endpoint = status ? `/api/incidents?status=${encodeURIComponent(status)}` : '/api/incidents';
-      return this.request(endpoint);
+    // Incidents Management
+    async getIncidents(status = '') {
+      const q = status ? `?status=${encodeURIComponent(status)}` : '';
+      return this.request(`/api/incidents${q}`);
     }
 
     async getIncident(id) {
@@ -228,11 +301,103 @@
     async resolveIncident(id, note) {
       return this.request(`/api/incidents/${id}/resolve`, {
         method: 'POST',
-        body: { note: note || 'Resolved via operator console' }
+        body: { note: note || 'Resolved by operator' }
       });
     }
 
-    // Dedicated Observability & Telemetry Views
+    async reopenIncident(id, note) {
+      return this.request(`/api/incidents/${id}/reopen`, {
+        method: 'POST',
+        body: { note: note || 'Reopened by operator' }
+      });
+    }
+
+    // Alerts Management
+    async getAlerts() {
+      return this.request('/api/alerts');
+    }
+
+    async getAlertRules() {
+      return this.request('/api/alerts/rules');
+    }
+
+    async createAlertRule(rule) {
+      return this.request('/api/alerts/rules', { method: 'POST', body: rule });
+    }
+
+    async updateAlertRule(id, rule) {
+      return this.request(`/api/alerts/rules/${id}`, { method: 'PUT', body: rule });
+    }
+
+    async deleteAlertRule(id) {
+      return this.request(`/api/alerts/rules/${id}`, { method: 'DELETE' });
+    }
+
+    async getAlertHistory() {
+      return this.request('/api/alerts/history');
+    }
+
+    // Visualization Studio & Dashboards
+    async getVisualizationTypes() {
+      return this.request('/api/visualizations/types');
+    }
+
+    async getVisualizationMetrics() {
+      return this.request('/api/visualizations/metrics');
+    }
+
+    async getSavedVisualizations() {
+      return this.request('/api/visualizations');
+    }
+
+    async createVisualization(config) {
+      return this.request('/api/visualizations', { method: 'POST', body: config });
+    }
+
+    async updateVisualization(id, config) {
+      return this.request(`/api/visualizations/${id}`, { method: 'PUT', body: config });
+    }
+
+    async deleteVisualization(id) {
+      return this.request(`/api/visualizations/${id}`, { method: 'DELETE' });
+    }
+
+    async getDashboards() {
+      return this.request('/api/dashboards');
+    }
+
+    async getDashboard(id) {
+      return this.request(`/api/dashboards/${id}`);
+    }
+
+    async createDashboard(dashboard) {
+      return this.request('/api/dashboards', { method: 'POST', body: dashboard });
+    }
+
+    async updateDashboard(id, dashboard) {
+      return this.request(`/api/dashboards/${id}`, { method: 'PUT', body: dashboard });
+    }
+
+    async deleteDashboard(id) {
+      return this.request(`/api/dashboards/${id}`, { method: 'DELETE' });
+    }
+
+    // Analytics & Telemetry Queries
+    async getAnalyticsTimeseries(params = {}) {
+      const qs = new URLSearchParams(params).toString();
+      return this.request(`/api/analytics/timeseries${qs ? '?' + qs : ''}`);
+    }
+
+    async getAnalyticsDistribution(params = {}) {
+      const qs = new URLSearchParams(params).toString();
+      return this.request(`/api/analytics/distribution${qs ? '?' + qs : ''}`);
+    }
+
+    async getAnalyticsHeatmap(params = {}) {
+      const qs = new URLSearchParams(params).toString();
+      return this.request(`/api/analytics/heatmap${qs ? '?' + qs : ''}`);
+    }
+
     async getHttpInsights() {
       return this.request('/api/dashboard/http-insights');
     }
@@ -245,28 +410,11 @@
       return this.request('/api/dashboard/security');
     }
 
-    async getEvents(limit = 40) {
+    async getEvents(limit = 50) {
       return this.request(`/api/dashboard/events?limit=${limit}`);
-    }
-
-    async getAlerts() {
-      return this.request('/api/dashboard/alerts');
-    }
-
-    // Quick Health Ping
-    async ping() {
-      try {
-        const start = performance.now();
-        await this.request('/health', { timeoutMs: 6000 });
-        const latency = Math.round(performance.now() - start);
-        return { online: true, latency };
-      } catch (err) {
-        return { online: false, error: err.message };
-      }
     }
   }
 
-  // Export singleton to global scope
   window.apiClient = new ApiClient();
 
 })(window);

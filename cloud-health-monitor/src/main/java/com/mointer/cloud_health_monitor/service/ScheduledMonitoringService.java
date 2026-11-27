@@ -6,9 +6,9 @@ import com.mointer.cloud_health_monitor.repository.HealthCheckRecordRepository;
 import com.mointer.cloud_health_monitor.repository.MonitoredServiceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,11 +22,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Coordinates automated periodic health checks for all enabled registered monitors.
- * Maintains consecutive failures, uptime percentages, downtime duration, and incident lifecycle.
+ * Scheduled background monitoring service.
+ * Manages fixed-interval health checks, concurrency tracking, incident creation,
+ * live alert rule evaluation, and Prometheus telemetry export.
  */
 @Service
-@EnableScheduling
 public class ScheduledMonitoringService {
 
     private static final Logger log = LoggerFactory.getLogger(ScheduledMonitoringService.class);
@@ -37,6 +37,7 @@ public class ScheduledMonitoringService {
     private final IncidentManagementService incidentService;
     private final PrometheusMetricsExportService metricsExportService;
     private final UptimeAnalyticsService analyticsService;
+    private AlertManagementService alertService;
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
     private final Set<Long> inFlightChecks = ConcurrentHashMap.newKeySet();
@@ -53,6 +54,11 @@ public class ScheduledMonitoringService {
         this.incidentService = incidentService;
         this.metricsExportService = metricsExportService;
         this.analyticsService = analyticsService;
+    }
+
+    @Autowired(required = false)
+    public void setAlertService(AlertManagementService alertService) {
+        this.alertService = alertService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -167,6 +173,15 @@ public class ScheduledMonitoringService {
 
         // Trigger incident management lifecycle
         incidentService.handleStatusChange(service, prevStatus, result.status(), result.errorMessage());
+
+        // Evaluate live alert rules
+        if (alertService != null) {
+            try {
+                alertService.evaluateRulesForService(service);
+            } catch (Exception e) {
+                log.error("Error evaluating alert rules for service {}", service.getId(), e);
+            }
+        }
 
         // Update Prometheus gauges and counters
         metricsExportService.updateMetrics(service, record);
