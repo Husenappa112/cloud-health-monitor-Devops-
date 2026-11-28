@@ -55,6 +55,11 @@
 
   /* ── Connection State Listener ──────────────────────────────────────────── */
   function initConnectionListener() {
+    window.apiClient.onFallbackActivated = (preset) => {
+      selectBackendPreset(preset, false);
+      showToast('Render backend offline — automatically connected to Localhost (8081).', 'warning');
+    };
+
     window.apiClient.onConnectionStateChange = (state, details, url) => {
       const dot = document.getElementById('api-status-dot');
       const label = document.getElementById('api-endpoint-label');
@@ -75,7 +80,7 @@
       }
 
       if (banner && msg) {
-        if (state === 'RECONNECTING') {
+        if (state === 'RECONNECTING' || state === 'DISCONNECTED') {
           banner.classList.add('visible');
           msg.textContent = details;
         } else {

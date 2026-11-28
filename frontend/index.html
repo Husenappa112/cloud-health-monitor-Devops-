@@ -138,7 +138,11 @@
         <div class="spinner"></div>
         <span id="warmup-msg">Backend is waking up (Render free tier cold start). Querying again in a moment...</span>
       </div>
-      <button class="btn btn-sm btn-ghost" onclick="refreshCurrentView()" style="color: #fbd38d;">Retry Now</button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-sm btn-ghost" onclick="selectBackendPreset('LOCAL')" style="color: #63b3ed;">Use Localhost (8081)</button>
+        <button class="btn btn-sm btn-ghost" onclick="switchView('settings')" style="color: #cbd5e0;">Settings</button>
+        <button class="btn btn-sm btn-ghost" onclick="refreshCurrentView()" style="color: #fbd38d;">Retry Now</button>
+      </div>
     </div>
 
     <!-- Workspace Scroll Area -->

@@ -128,6 +128,27 @@
     }
 
     /**
+     * Probe local Spring Boot backend (localhost:8081) as an automatic fallback
+     * when the Render production backend is offline or not yet deployed.
+     */
+    async tryLocalFallback() {
+      const localBase = (window.CHM_CONFIG && window.CHM_CONFIG.LOCAL_BACKEND) || 'http://localhost:8081';
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 2500);
+      try {
+        const res = await fetch(`${localBase}/health`, {
+          headers: { 'Accept': 'application/json' },
+          signal: controller.signal
+        });
+        clearTimeout(tid);
+        return res.ok;
+      } catch (_) {
+        clearTimeout(tid);
+        return false;
+      }
+    }
+
+    /**
      * Resilient fetch wrapper with MIME-type pre-validation and cold-start backoff.
      */
     async request(endpoint, options = {}) {
@@ -158,8 +179,22 @@
           this.handleConnectionFailure(`Request timed out after ${this.timeoutMs / 1000}s. Backend might be starting up from cold start.`);
           throw new Error(`Request timeout: Backend at ${this.getBaseUrl()} took longer than ${this.timeoutMs / 1000}s to respond.`);
         }
-        this.handleConnectionFailure(`Network error connecting to backend: ${err.message}`);
-        throw new Error(`Network error connecting to backend (${url}): ${err.message}`);
+
+        // Auto-fallback from unreachable Render production URL to running local backend (localhost:8081)
+        if (this.getStoredPreset() === 'PRODUCTION' && !options._isFallbackRetry) {
+          const localAlive = await this.tryLocalFallback();
+          if (localAlive) {
+            this.setPreset('LOCAL');
+            if (typeof this.onFallbackActivated === 'function') {
+              this.onFallbackActivated('LOCAL', this.getBaseUrl());
+            }
+            return this.request(endpoint, Object.assign({}, options, { _isFallbackRetry: true }));
+          }
+        }
+
+        const helpfulMsg = `Backend unreachable at ${url} (${err.message}). Verify the Render service is deployed/running or switch to Localhost (8081) in Settings.`;
+        this.handleConnectionFailure(helpfulMsg);
+        throw new Error(helpfulMsg);
       } finally {
         clearTimeout(timeoutId);
       }
