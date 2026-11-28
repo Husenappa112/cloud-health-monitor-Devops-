@@ -36,6 +36,13 @@
           localStorage.removeItem('CHM_BACKEND_PRESET');
         }
       }
+      if (window.location.hostname.includes('vercel.app')) {
+        const preset = localStorage.getItem('CHM_BACKEND_PRESET');
+        if (preset === 'LOCAL') {
+          console.warn('[CHM] Clearing LOCAL preset in production Vercel environment.');
+          localStorage.removeItem('CHM_BACKEND_PRESET');
+        }
+      }
     } catch (e) {
       // Storage unavailable
     }

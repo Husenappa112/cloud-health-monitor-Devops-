@@ -293,4 +293,37 @@ class ApiIntegrationTest {
                 .retrieve().body(List.class);
         assertThat(body).hasSize(2);
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Analytics Endpoints (Timeseries, Distribution, Heatmap, Timeline, Errors)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void analyticsEndpoints_emptyAndInvalidRange_behaveCorrectly() {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> ts = client.get().uri("/api/analytics/timeseries?metric=RESPONSE_TIME&range=24h")
+                .retrieve().body(Map.class);
+        assertThat(ts).containsKey("timestamps").containsKey("values").containsKey("seriesByMonitor");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> dist = client.get().uri("/api/analytics/distribution?range=24h")
+                .retrieve().body(Map.class);
+        assertThat(dist).containsKey("statusCodes").containsKey("latencyBuckets").containsKey("percentiles");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> hm = client.get().uri("/api/analytics/heatmap?range=7d")
+                .retrieve().body(Map.class);
+        assertThat(hm).containsKey("days").containsKey("hours").containsKey("data");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> tl = client.get().uri("/api/analytics/timeline?range=24h")
+                .retrieve().body(Map.class);
+        assertThat(tl).containsKey("timelines");
+
+        // Invalid date range (from > to) should return 400 Bad Request
+        assertThatThrownBy(() ->
+                client.get().uri("/api/analytics/timeseries?from=2026-12-01T00:00:00Z&to=2026-11-01T00:00:00Z")
+                        .retrieve().toBodilessEntity()
+        ).isInstanceOf(HttpClientErrorException.BadRequest.class);
+    }
 }

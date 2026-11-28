@@ -268,14 +268,18 @@
     const dom = document.getElementById('overview-latency-chart');
     if (!dom || typeof echarts === 'undefined') return;
 
-    let chart = echartsInstances['overview-latency'];
-    if (!chart) {
-      chart = echarts.init(dom, 'dark');
-      echartsInstances['overview-latency'] = chart;
-    }
-
     const times = data.timestamps ? data.timestamps.map(t => formatShortTime(t)) : [];
     const values = data.values || [];
+    if (values.length === 0) {
+      disposeChartOnDom(dom, 'overview-latency');
+      dom.innerHTML = renderEmptyStateHtml('No monitoring data available yet.', 'Waiting for the first successful monitoring result.');
+      return;
+    }
+
+    disposeChartOnDom(dom, 'overview-latency');
+    dom.innerHTML = '';
+    const chart = echarts.init(dom, 'dark');
+    echartsInstances['overview-latency'] = chart;
 
     const option = {
       backgroundColor: 'transparent',
@@ -287,7 +291,7 @@
         name: 'Response Latency',
         type: 'line',
         smooth: true,
-        showSymbol: false,
+        showSymbol: values.length <= 5,
         data: values,
         itemStyle: { color: '#58a6ff' },
         areaStyle: {
@@ -305,17 +309,22 @@
     const dom = document.getElementById('overview-donut-chart');
     if (!dom || typeof echarts === 'undefined') return;
 
-    let chart = echartsInstances['overview-donut'];
-    if (!chart) {
-      chart = echarts.init(dom, 'dark');
-      echartsInstances['overview-donut'] = chart;
+    if (!data || !data.totalRecords) {
+      disposeChartOnDom(dom, 'overview-donut');
+      dom.innerHTML = renderEmptyStateHtml('No monitoring data available yet.', 'Waiting for the first successful monitoring result.');
+      return;
     }
 
-    const codes = data.statusCodes || { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 };
+    disposeChartOnDom(dom, 'overview-donut');
+    dom.innerHTML = '';
+    const chart = echarts.init(dom, 'dark');
+    echartsInstances['overview-donut'] = chart;
+
+    const codes = data.statusCodes || { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, 'failures': 0 };
 
     const option = {
       backgroundColor: 'transparent',
-      tooltip: { trigger: 'item', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
       legend: { bottom: '0', textStyle: { color: '#8b949e', fontSize: 11 } },
       series: [{
         name: 'Status Codes',
@@ -328,7 +337,8 @@
           { value: codes['2xx'] || 0, name: '2xx Success', itemStyle: { color: '#3fb950' } },
           { value: codes['3xx'] || 0, name: '3xx Redirect', itemStyle: { color: '#388bfd' } },
           { value: codes['4xx'] || 0, name: '4xx Client Err', itemStyle: { color: '#d29922' } },
-          { value: codes['5xx'] || 0, name: '5xx Server Err', itemStyle: { color: '#f85149' } }
+          { value: codes['5xx'] || 0, name: '5xx Server Err', itemStyle: { color: '#f85149' } },
+          { value: codes['failures'] || 0, name: 'Failures', itemStyle: { color: '#8b949e' } }
         ]
       }]
     };
@@ -415,23 +425,35 @@
   /* ── View 3: Dashboards (Grafana-Style Multi-Panel) ──────────────────────── */
   async function fetchDashboards() {
     isRequestInProgress = true;
+    const container = document.getElementById('dashboards-container');
     try {
-      const dashboards = await window.apiClient.getDashboards();
-      cachedDashboards = dashboards;
+      const [dashboards, monitors] = await Promise.all([
+        window.apiClient.getDashboards(),
+        cachedMonitors.length > 0 ? Promise.resolve(cachedMonitors) : window.apiClient.getMonitors().catch(() => [])
+      ]);
+      cachedDashboards = Array.isArray(dashboards) ? dashboards : [];
+      if (Array.isArray(monitors)) cachedMonitors = monitors;
 
       const sel = document.getElementById('dashboard-select');
       if (sel) {
-        sel.innerHTML = dashboards.map(d => `<option value="${d.id}" ${d.id === currentDashboardId ? 'selected' : ''}>${escapeHtml(d.title)} ${d.isDefault ? '(Default)' : ''}</option>`).join('');
-        if (!currentDashboardId && dashboards.length > 0) {
-          currentDashboardId = dashboards[0].id;
+        if (!currentDashboardId && cachedDashboards.length > 0) {
+          currentDashboardId = cachedDashboards[0].id;
         }
+        sel.innerHTML = cachedDashboards.map(d =>
+          `<option value="${d.id}" ${d.id === currentDashboardId ? 'selected' : ''}>${escapeHtml(d.title)} ${(d.default || d.isDefault) ? '(Default)' : ''}</option>`
+        ).join('');
       }
 
       if (currentDashboardId) {
         renderCurrentDashboard();
+      } else if (container) {
+        container.innerHTML = renderEmptyStateHtml('No dashboards found.', 'Click "+ New Dashboard" to create one.');
       }
     } catch (err) {
       console.error('Error fetching dashboards:', err);
+      if (container) {
+        container.innerHTML = `<div style="grid-column: span 12;">${renderErrorStateHtml('Unable to load monitoring data. Check backend connectivity.', 'fetchDashboards()')}</div>`;
+      }
     } finally {
       isRequestInProgress = false;
     }
@@ -444,142 +466,563 @@
     renderCurrentDashboard();
   };
 
-  async function renderCurrentDashboard() {
+  window.renderCurrentDashboard = async function () {
     const container = document.getElementById('dashboards-container');
     if (!container) return;
 
     const dash = cachedDashboards.find(d => d.id === currentDashboardId);
     if (!dash || !dash.panels || dash.panels.length === 0) {
-      container.innerHTML = '<div style="grid-column: span 12; text-align: center; color: var(--text-muted); padding: 48px;">This dashboard has no panels yet. Click "+ Add Panel" to create one in the Visualization Studio.</div>';
+      container.innerHTML = `<div style="grid-column: span 12;">${renderEmptyStateHtml('This dashboard has no panels yet.', 'Click "+ Add Panel" to create one in the Visualization Studio.')}</div>`;
       return;
     }
 
-    container.innerHTML = dash.panels.map(p => {
+    const globalRange = document.getElementById('dashboard-timerange')?.value || '24h';
+
+    container.innerHTML = dash.panels.map((p, idx) => {
       const colClass = p.gridW >= 12 ? 'panel-col-12' : (p.gridW >= 8 ? 'panel-col-8' : (p.gridW >= 6 ? 'panel-col-6' : 'panel-col-4'));
+      const domId = `chart-panel-${p.id || idx}`;
       return `
         <div class="panel ${colClass}" style="margin-bottom: 0;">
           <div class="panel-header">
             <span class="panel-title">${escapeHtml(p.title)}</span>
-            <span class="badge badge-unknown mono">${p.visualizationType}</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="badge badge-unknown mono">${escapeHtml(p.visualizationType)}</span>
+              <button class="btn btn-ghost btn-sm" onclick="removeDashboardPanel(${p.id})" title="Remove panel" style="padding:2px 6px; color:var(--text-muted);">&times;</button>
+            </div>
           </div>
           <div class="panel-body">
-            <div id="chart-panel-${p.id}" class="echarts-box" style="height: 240px;"></div>
+            <div id="${domId}" class="echarts-box" style="height: 250px; position: relative;"></div>
           </div>
         </div>
       `;
     }).join('');
 
-    // Initialize ECharts on each panel asynchronously
-    dash.panels.forEach(p => {
-      setTimeout(() => renderEChartForPanel(p), 50);
+    // Render each panel asynchronously after layout settles
+    dash.panels.forEach((p, idx) => {
+      const domId = `chart-panel-${p.id || idx}`;
+      setTimeout(() => {
+        const dom = document.getElementById(domId);
+        if (dom) {
+          renderVisualizationChart(dom, {
+            title: p.title,
+            type: p.visualizationType || 'TIME_SERIES',
+            metric: p.metric || 'RESPONSE_TIME',
+            range: globalRange || p.timeRange || '24h',
+            monitorId: p.monitorId || null
+          }, `panel-${p.id || idx}`);
+        }
+      }, 40);
     });
+  };
+
+  window.removeDashboardPanel = async function (panelId) {
+    if (!currentDashboardId || !panelId) return;
+    const dash = cachedDashboards.find(d => d.id === currentDashboardId);
+    if (!dash) return;
+    try {
+      dash.panels = (dash.panels || []).filter(p => p.id !== panelId);
+      const updated = await window.apiClient.updateDashboard(currentDashboardId, dash);
+      const idx = cachedDashboards.findIndex(d => d.id === currentDashboardId);
+      if (idx >= 0) cachedDashboards[idx] = updated;
+      showToast('Panel removed from dashboard.', 'success');
+      renderCurrentDashboard();
+    } catch (err) {
+      showToast(`Failed to remove panel: ${err.message}`, 'error');
+    }
+  };
+
+  function renderLoadingStateHtml(msg = 'Loading telemetry data...') {
+    return `<div style="display:flex; height:100%; align-items:center; justify-content:center; flex-direction:column; color:var(--text-muted); gap:8px; padding:16px;">
+      <div class="spinner"></div>
+      <span style="font-size:12px;">${escapeHtml(msg)}</span>
+    </div>`;
   }
 
-  async function renderEChartForPanel(panel) {
-    const dom = document.getElementById(`chart-panel-${panel.id}`);
-    if (!dom || typeof echarts === 'undefined') return;
+  function renderEmptyStateHtml(title, subtitle) {
+    return `<div style="display:flex; height:100%; min-height:160px; align-items:center; justify-content:center; flex-direction:column; color:var(--text-muted); text-align:center; padding:20px; gap:6px;">
+      <strong style="font-size:13px; color:var(--text-secondary);">${escapeHtml(title)}</strong>
+      <span style="font-size:12px;">${escapeHtml(subtitle)}</span>
+    </div>`;
+  }
 
-    let chart = echarts.init(dom, 'dark');
-    echartsInstances[`panel-${panel.id}`] = chart;
+  function renderErrorStateHtml(message, retryCall) {
+    return `<div style="display:flex; height:100%; min-height:160px; align-items:center; justify-content:center; flex-direction:column; color:var(--color-down); text-align:center; padding:20px; gap:10px;">
+      <strong style="font-size:13px;">${escapeHtml(message)}</strong>
+      ${retryCall ? `<button class="btn btn-secondary btn-sm" onclick="${retryCall}">Retry</button>` : ''}
+    </div>`;
+  }
 
-    const metric = panel.metric || 'RESPONSE_TIME';
-    const type = panel.visualizationType || 'TIME_SERIES';
-    const range = panel.timeRange || '24h';
+  function disposeChartOnDom(dom, instanceKey) {
+    if (echartsInstances[instanceKey]) {
+      try { echartsInstances[instanceKey].dispose(); } catch (_) {}
+      delete echartsInstances[instanceKey];
+    }
+    const existing = typeof echarts !== 'undefined' ? echarts.getInstanceByDom(dom) : null;
+    if (existing) {
+      try { existing.dispose(); } catch (_) {}
+    }
+  }
 
-    // Fetch live backend analytics data for panel
-    const tsData = await window.apiClient.getAnalyticsTimeseries({ monitorId: panel.monitorId, metric, range });
-    const times = tsData.timestamps ? tsData.timestamps.map(t => formatShortTime(t)) : ['10:00', '11:00', '12:00', '13:00', '14:00'];
-    const values = tsData.values && tsData.values.length > 0 ? tsData.values : [42, 45, 41, 68, 52];
+  /**
+   * Unified Real-Data ECharts Renderer used by both Dashboards and Visualization Studio.
+   * Never fabricates fallback metrics; displays intelligent loading/empty/error states.
+   */
+  async function renderVisualizationChart(dom, cfg, instanceKey) {
+    if (!dom) return;
+    const metric = cfg.metric || 'RESPONSE_TIME';
+    const type = cfg.type || 'TIME_SERIES';
+    const range = cfg.range || '24h';
+    const monitorId = cfg.monitorId || null;
 
-    let option = {
-      backgroundColor: 'transparent',
-      tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
-      grid: { left: '3%', right: '4%', bottom: '8%', top: '10%', containLabel: true }
-    };
-
-    if (type === 'GAUGE') {
-      const val = metric === 'UPTIME' ? 99.8 : (values[values.length - 1] || 45);
-      option = {
-        backgroundColor: 'transparent',
-        series: [{
-          type: 'gauge',
-          startAngle: 180,
-          endAngle: 0,
-          min: 0,
-          max: metric === 'UPTIME' ? 100 : 500,
-          radius: '90%',
-          progress: { show: true, width: 12, itemStyle: { color: metric === 'UPTIME' ? '#3fb950' : '#58a6ff' } },
-          pointer: { show: true, length: '60%', width: 4 },
-          axisLine: { lineStyle: { width: 12, color: [[1, '#21262d']] } },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { color: '#8b949e', distance: 16, fontSize: 10 },
-          detail: { valueAnimation: true, offsetCenter: [0, '-15%'], fontSize: 22, color: '#f0f6fc', formatter: `{value} ${metric === 'UPTIME' ? '%' : 'ms'}` },
-          data: [{ value: Math.round(val * 10) / 10 }]
-        }]
-      };
-    } else if (type === 'AREA') {
-      option.xAxis = { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#30363d' } } };
-      option.yAxis = { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } };
-      option.series = [{
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        data: values,
-        itemStyle: { color: '#a371f7' },
-        areaStyle: { color: 'rgba(163, 113, 247, 0.25)' }
-      }];
-    } else if (type === 'BAR_VERTICAL') {
-      option.xAxis = { type: 'category', data: times.slice(-10), axisLine: { lineStyle: { color: '#30363d' } } };
-      option.yAxis = { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } };
-      option.series = [{
-        type: 'bar',
-        data: values.slice(-10),
-        itemStyle: { color: '#388bfd', borderRadius: [3, 3, 0, 0] }
-      }];
-    } else if (type === 'DONUT') {
-      option = {
-        backgroundColor: 'transparent',
-        tooltip: { trigger: 'item' },
-        series: [{
-          type: 'pie',
-          radius: ['45%', '70%'],
-          itemStyle: { borderRadius: 4, borderColor: '#161b22', borderWidth: 2 },
-          data: [
-            { value: 92, name: 'Operational', itemStyle: { color: '#3fb950' } },
-            { value: 5, name: 'Degraded', itemStyle: { color: '#d29922' } },
-            { value: 3, name: 'Down', itemStyle: { color: '#f85149' } }
-          ]
-        }]
-      };
-    } else {
-      // Default: TIME_SERIES line
-      option.xAxis = { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#30363d' } } };
-      option.yAxis = { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } };
-      option.series = [{
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        data: values,
-        itemStyle: { color: '#3fb950' }
-      }];
+    // Handle NOT_CONNECTED remote host metrics authentically
+    if (metric === 'HOST_CPU' || metric === 'HOST_RAM') {
+      disposeChartOnDom(dom, instanceKey);
+      dom.innerHTML = renderEmptyStateHtml(
+        'NOT CONNECTED — REMOTE HOST TELEMETRY UNAVAILABLE',
+        'External monitored websites do not expose remote CPU or RAM without a host telemetry agent.'
+      );
+      return;
     }
 
-    chart.setOption(option);
+    disposeChartOnDom(dom, instanceKey);
+    dom.innerHTML = renderLoadingStateHtml();
+
+    try {
+      // 1. GAUGE / BAR_GAUGE
+      if (type === 'GAUGE' || type === 'BAR_GAUGE') {
+        if (metric === 'UPTIME') {
+          const summary = await window.apiClient.getSummary();
+          if (!summary || (summary.totalMonitors === 0 && summary.totalChecks === 0)) {
+            dom.innerHTML = renderEmptyStateHtml(
+              'No monitoring data available yet.',
+              'Waiting for the first successful monitoring result.'
+            );
+            return;
+          }
+          const uptime = summary.overallUptimePercentage != null ? Number(summary.overallUptimePercentage) : 0;
+          const up = summary.upCount ?? 0;
+          const deg = summary.degradedCount ?? 0;
+          const down = summary.downCount ?? 0;
+          const total = summary.totalMonitors ?? 0;
+
+          dom.innerHTML = '';
+          const chart = echarts.init(dom, 'dark');
+          echartsInstances[instanceKey] = chart;
+          chart.setOption({
+            backgroundColor: 'transparent',
+            title: {
+              text: `${up} UP · ${deg} DEG · ${down} DOWN (${total} Total)`,
+              left: 'center',
+              bottom: 6,
+              textStyle: { color: '#8b949e', fontSize: 11, fontWeight: 'normal' }
+            },
+            series: [{
+              type: 'gauge',
+              startAngle: 180,
+              endAngle: 0,
+              min: 0,
+              max: 100,
+              radius: '88%',
+              center: ['50%', '62%'],
+              progress: { show: true, width: 12, itemStyle: { color: uptime >= 99 ? '#3fb950' : (uptime >= 90 ? '#d29922' : '#f85149') } },
+              pointer: { show: true, length: '58%', width: 4 },
+              axisLine: { lineStyle: { width: 12, color: [[1, '#21262d']] } },
+              axisTick: { show: false },
+              splitLine: { show: false },
+              axisLabel: { color: '#8b949e', distance: 14, fontSize: 10 },
+              detail: { valueAnimation: true, offsetCenter: [0, '-14%'], fontSize: 22, color: '#f0f6fc', formatter: '{value}%' },
+              data: [{ value: Math.round(uptime * 100) / 100 }]
+            }]
+          });
+          return;
+        }
+
+        const tsData = await window.apiClient.getAnalyticsTimeseries({ monitorId, metric, range });
+        const values = tsData.values || [];
+        if (values.length === 0) {
+          dom.innerHTML = renderEmptyStateHtml(
+            'No data available for the selected time range.',
+            'Waiting for completed monitoring checks.'
+          );
+          return;
+        }
+        const latest = Number(values[values.length - 1] ?? 0);
+        const unit = metric === 'JVM_HEAP' ? '%' : (metric === 'JVM_THREADS' ? '' : (metric === 'SSL_DAYS' ? 'd' : ' ms'));
+        const maxVal = metric === 'JVM_HEAP' ? 100 : Math.max(100, Math.ceil(latest * 1.5));
+
+        dom.innerHTML = '';
+        const chart = echarts.init(dom, 'dark');
+        echartsInstances[instanceKey] = chart;
+        chart.setOption({
+          backgroundColor: 'transparent',
+          series: [{
+            type: 'gauge',
+            startAngle: 180,
+            endAngle: 0,
+            min: 0,
+            max: maxVal,
+            radius: '88%',
+            center: ['50%', '65%'],
+            progress: { show: true, width: 12, itemStyle: { color: '#58a6ff' } },
+            pointer: { show: true, length: '58%', width: 4 },
+            axisLine: { lineStyle: { width: 12, color: [[1, '#21262d']] } },
+            axisTick: { show: false },
+            splitLine: { show: false },
+            axisLabel: { color: '#8b949e', distance: 14, fontSize: 10 },
+            detail: { valueAnimation: true, offsetCenter: [0, '-14%'], fontSize: 20, color: '#f0f6fc', formatter: `{value}${unit}` },
+            data: [{ value: Math.round(latest * 10) / 10 }]
+          }]
+        });
+        return;
+      }
+
+      // 2. DONUT / PIE / BAR_STACKED (HTTP Status Distribution or SSL Health)
+      if (type === 'DONUT' || type === 'PIE' || type === 'BAR_STACKED') {
+        if (metric === 'SSL_DAYS') {
+          const monitors = await window.apiClient.getMonitors();
+          if (!monitors || monitors.length === 0) {
+            dom.innerHTML = renderEmptyStateHtml('No monitoring data available yet.', 'Register a monitor to inspect TLS/SSL health.');
+            return;
+          }
+          let valid = 0, expiring = 0, invalid = 0;
+          monitors.forEach(m => {
+            if (m.sslValid === false) invalid++;
+            else if (m.sslDaysRemaining != null && m.sslDaysRemaining <= 14) expiring++;
+            else if (m.sslValid === true) valid++;
+          });
+          if (valid + expiring + invalid === 0) {
+            dom.innerHTML = renderEmptyStateHtml('No SSL certificate data yet.', 'Waiting for HTTPS check completion.');
+            return;
+          }
+          dom.innerHTML = '';
+          const chart = echarts.init(dom, 'dark');
+          echartsInstances[instanceKey] = chart;
+          chart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: { trigger: 'item', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+            legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 11 } },
+            series: [{
+              type: 'pie',
+              radius: type === 'PIE' ? '70%' : ['45%', '70%'],
+              itemStyle: { borderRadius: 4, borderColor: '#161b22', borderWidth: 2 },
+              label: { show: false },
+              data: [
+                { value: valid, name: 'Valid SSL (>14d)', itemStyle: { color: '#3fb950' } },
+                { value: expiring, name: 'Expiring Soon (<=14d)', itemStyle: { color: '#d29922' } },
+                { value: invalid, name: 'Invalid / Expired', itemStyle: { color: '#f85149' } }
+              ]
+            }]
+          });
+          return;
+        }
+
+        const dist = await window.apiClient.getAnalyticsDistribution({ monitorId, range });
+        const total = dist.totalRecords || 0;
+        if (total === 0) {
+          dom.innerHTML = renderEmptyStateHtml('No data available for the selected time range.', 'Waiting for completed HTTP checks.');
+          return;
+        }
+        const codes = dist.statusCodes || {};
+        const sliceData = [
+          { value: codes['2xx'] || 0, name: '2xx Success', itemStyle: { color: '#3fb950' } },
+          { value: codes['3xx'] || 0, name: '3xx Redirect', itemStyle: { color: '#388bfd' } },
+          { value: codes['4xx'] || 0, name: '4xx Client Err', itemStyle: { color: '#d29922' } },
+          { value: codes['5xx'] || 0, name: '5xx Server Err', itemStyle: { color: '#f85149' } },
+          { value: codes['failures'] || 0, name: 'Failures / Timeouts', itemStyle: { color: '#8b949e' } }
+        ];
+
+        dom.innerHTML = '';
+        const chart = echarts.init(dom, 'dark');
+        echartsInstances[instanceKey] = chart;
+        if (type === 'BAR_STACKED') {
+          chart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+            grid: { left: '4%', right: '4%', bottom: '12%', top: '12%', containLabel: true },
+            xAxis: { type: 'category', data: sliceData.map(s => s.name), axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } },
+            series: [{ type: 'bar', data: sliceData.map(s => ({ value: s.value, itemStyle: s.itemStyle })) }]
+          });
+        } else {
+          chart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'item',
+              formatter: '{b}: {c} ({d}%)',
+              backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' }
+            },
+            legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 11 } },
+            series: [{
+              type: 'pie',
+              radius: type === 'PIE' ? '70%' : ['45%', '70%'],
+              itemStyle: { borderRadius: 4, borderColor: '#161b22', borderWidth: 2 },
+              label: { show: false },
+              data: sliceData
+            }]
+          });
+        }
+        return;
+      }
+
+      // 3. STATUS_TIMELINE (Real historical UP / DEGRADED / DOWN checks)
+      if (type === 'STATUS_TIMELINE') {
+        const tlData = await window.apiClient.getAnalyticsTimeline({ monitorId, range });
+        const timelines = tlData.timelines || [];
+        const hasAnyChecks = timelines.some(t => t.checks && t.checks.length > 0);
+        if (timelines.length === 0 || !hasAnyChecks) {
+          dom.innerHTML = renderEmptyStateHtml(
+            'No monitoring data available yet.',
+            'Waiting for the first successful monitoring result.'
+          );
+          return;
+        }
+
+        const monitorNames = timelines.map(t => t.monitorName);
+        const points = [];
+        timelines.forEach((t, yIdx) => {
+          (t.checks || []).forEach(c => {
+            const stateCode = c.status === 'UP' ? 2 : (c.status === 'DEGRADED' ? 1 : 0);
+            points.push({
+              value: [c.checkedAt, yIdx, stateCode, c.httpStatusCode || 'ERR', c.responseTimeMs || 0, c.status],
+              itemStyle: { color: c.status === 'UP' ? '#3fb950' : (c.status === 'DEGRADED' ? '#d29922' : '#f85149') }
+            });
+          });
+        });
+
+        dom.innerHTML = '';
+        const chart = echarts.init(dom, 'dark');
+        echartsInstances[instanceKey] = chart;
+        chart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'item',
+            backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' },
+            formatter: (p) => {
+              const v = p.data.value;
+              return `<strong>${escapeHtml(monitorNames[v[1]])}</strong><br/>State: ${v[5]}<br/>HTTP: ${v[3]} · ${v[4]} ms<br/>Time: ${formatShortTime(v[0])}`;
+            }
+          },
+          grid: { left: '3%', right: '4%', bottom: '12%', top: '10%', containLabel: true },
+          xAxis: { type: 'time', axisLine: { lineStyle: { color: '#30363d' } }, splitLine: { lineStyle: { color: '#21262d' } } },
+          yAxis: { type: 'category', data: monitorNames, axisLine: { lineStyle: { color: '#30363d' } } },
+          series: [{
+            type: 'scatter',
+            symbol: 'roundRect',
+            symbolSize: [12, 22],
+            data: points
+          }]
+        });
+        return;
+      }
+
+      // 4. HEATMAP (Real hourly latency matrix)
+      if (type === 'HEATMAP') {
+        const hmData = await window.apiClient.getAnalyticsHeatmap({ monitorId, range });
+        if (!hmData.data || hmData.data.length === 0) {
+          dom.innerHTML = renderEmptyStateHtml('No data available for the selected time range.', 'Heatmap populates as checks accumulate.');
+          return;
+        }
+        const maxVal = Math.max(100, ...hmData.data.map(d => d[2]));
+        dom.innerHTML = '';
+        const chart = echarts.init(dom, 'dark');
+        echartsInstances[instanceKey] = chart;
+        chart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { position: 'top', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+          grid: { height: '65%', top: '10%', left: '8%', right: '4%' },
+          xAxis: { type: 'category', data: hmData.hours, splitArea: { show: true } },
+          yAxis: { type: 'category', data: hmData.days, splitArea: { show: true } },
+          visualMap: { min: 0, max: maxVal, calculable: true, orient: 'horizontal', left: 'center', bottom: '0', inRange: { color: ['#238636', '#d29922', '#f85149'] } },
+          series: [{ type: 'heatmap', data: hmData.data, label: { show: false } }]
+        });
+        return;
+      }
+
+      // 5. HISTOGRAM or LATENCY_PERCENTILES
+      if (type === 'HISTOGRAM' || metric === 'LATENCY_PERCENTILES') {
+        const dist = await window.apiClient.getAnalyticsDistribution({ monitorId, range });
+        if (!dist.totalRecords) {
+          dom.innerHTML = renderEmptyStateHtml('No data available for the selected time range.', 'Waiting for completed HTTP checks.');
+          return;
+        }
+        dom.innerHTML = '';
+        const chart = echarts.init(dom, 'dark');
+        echartsInstances[instanceKey] = chart;
+        if (metric === 'LATENCY_PERCENTILES') {
+          const pct = dist.percentiles || {};
+          chart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+            grid: { left: '4%', right: '4%', bottom: '10%', top: '12%', containLabel: true },
+            xAxis: { type: 'category', data: ['P50', 'P90', 'P95', 'P99'], axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', name: 'ms', splitLine: { lineStyle: { color: '#21262d' } } },
+            series: [{ type: 'bar', data: [pct.p50 || 0, pct.p90 || 0, pct.p95 || 0, pct.p99 || 0], itemStyle: { color: '#58a6ff', borderRadius: [4, 4, 0, 0] } }]
+          });
+        } else {
+          const buckets = dist.latencyBuckets || {};
+          const keys = Object.keys(buckets);
+          chart.setOption({
+            backgroundColor: 'transparent',
+            tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+            grid: { left: '4%', right: '4%', bottom: '10%', top: '12%', containLabel: true },
+            xAxis: { type: 'category', data: keys, axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', name: 'Checks', splitLine: { lineStyle: { color: '#21262d' } } },
+            series: [{ type: 'bar', data: keys.map(k => buckets[k]), itemStyle: { color: '#a371f7', borderRadius: [4, 4, 0, 0] } }]
+          });
+        }
+        return;
+      }
+
+      // 6. BAR_HORIZONTAL (SSL Days or Consecutive Failures per monitor)
+      if (type === 'BAR_HORIZONTAL' || metric === 'SSL_DAYS' || metric === 'CONSECUTIVE_FAILURES') {
+        const monitors = await window.apiClient.getMonitors();
+        if (!monitors || monitors.length === 0) {
+          dom.innerHTML = renderEmptyStateHtml('No monitoring data available yet.', 'Register a monitor to inspect metrics.');
+          return;
+        }
+        const names = monitors.map(m => m.name);
+        const vals = monitors.map(m => metric === 'SSL_DAYS' ? (m.sslDaysRemaining ?? 0) : (metric === 'CONSECUTIVE_FAILURES' ? (m.consecutiveFailures ?? 0) : (m.lastResponseTimeMs ?? 0)));
+        dom.innerHTML = '';
+        const chart = echarts.init(dom, 'dark');
+        echartsInstances[instanceKey] = chart;
+        chart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+          grid: { left: '4%', right: '6%', bottom: '8%', top: '8%', containLabel: true },
+          xAxis: { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } },
+          yAxis: { type: 'category', data: names, axisLine: { lineStyle: { color: '#30363d' } } },
+          series: [{
+            type: 'bar',
+            data: vals,
+            itemStyle: { color: metric === 'CONSECUTIVE_FAILURES' ? '#f85149' : '#3fb950', borderRadius: [0, 4, 4, 0] }
+          }]
+        });
+        return;
+      }
+
+      // 7. STAT / TABLE / TIME_SERIES / MULTI_SERIES / AREA / BAR_VERTICAL
+      const tsData = await window.apiClient.getAnalyticsTimeseries({ monitorId, metric, range });
+      const timestamps = tsData.timestamps || [];
+      const values = tsData.values || [];
+
+      if (values.length === 0) {
+        dom.innerHTML = renderEmptyStateHtml(
+          'No data available for the selected time range.',
+          'Waiting for completed monitoring checks.'
+        );
+        return;
+      }
+
+      if (type === 'STAT') {
+        const latest = values[values.length - 1];
+        const stats = tsData.stats || {};
+        dom.innerHTML = `<div style="display:flex; height:100%; align-items:center; justify-content:center; flex-direction:column; gap:6px;">
+          <div style="font-size:36px; font-weight:700; color:var(--text-primary);">${latest}</div>
+          <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(metric)} · Avg: ${stats.avg ?? latest} · Max: ${stats.max ?? latest}</div>
+        </div>`;
+        return;
+      }
+
+      if (type === 'TABLE') {
+        const rows = timestamps.slice(-15).reverse().map((t, i) => {
+          const val = values[values.length - 1 - i];
+          return `<tr><td class="mono">${escapeHtml(formatShortTime(t))}</td><td class="mono">${val}</td></tr>`;
+        }).join('');
+        dom.innerHTML = `<div style="overflow:auto; height:100%;">
+          <table class="data-table"><thead><tr><th>Timestamp</th><th>${escapeHtml(metric)}</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>`;
+        return;
+      }
+
+      const times = timestamps.map(t => formatShortTime(t));
+      const seriesByMonitor = tsData.seriesByMonitor || [];
+      const stats = tsData.stats || {};
+      const statsSub = stats.avg != null ? `Avg: ${stats.avg} · Min: ${stats.min} · Max: ${stats.max} · P95: ${stats.p95} · P99: ${stats.p99}` : '';
+
+      dom.innerHTML = '';
+      const chart = echarts.init(dom, 'dark');
+      echartsInstances[instanceKey] = chart;
+
+      const palette = ['#58a6ff', '#3fb950', '#a371f7', '#d29922', '#f778ba'];
+      let series = [];
+
+      if ((type === 'TIME_SERIES' || type === 'MULTI_SERIES') && seriesByMonitor.length > 1) {
+        // Multi-series: plot each monitor cleanly on time axis
+        series = seriesByMonitor.map((m, idx) => ({
+          name: m.monitorName || `Monitor #${m.monitorId}`,
+          type: 'line',
+          smooth: true,
+          showSymbol: m.values.length <= 5,
+          data: m.timestamps.map((t, i) => [t, m.values[i]]),
+          itemStyle: { color: palette[idx % palette.length] }
+        }));
+        chart.setOption({
+          backgroundColor: 'transparent',
+          title: statsSub ? { text: statsSub, left: 'center', top: 0, textStyle: { color: '#8b949e', fontSize: 10, fontWeight: 'normal' } } : undefined,
+          tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+          legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 11 } },
+          grid: { left: '3%', right: '4%', bottom: '16%', top: statsSub ? '16%' : '10%', containLabel: true },
+          xAxis: { type: 'time', axisLine: { lineStyle: { color: '#30363d' } } },
+          yAxis: { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } },
+          series
+        });
+        return;
+      }
+
+      if (type === 'BAR_VERTICAL') {
+        series = [{ type: 'bar', data: values.slice(-15), itemStyle: { color: '#388bfd', borderRadius: [3, 3, 0, 0] } }];
+        chart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+          grid: { left: '3%', right: '4%', bottom: '8%', top: '10%', containLabel: true },
+          xAxis: { type: 'category', data: times.slice(-15), axisLine: { lineStyle: { color: '#30363d' } } },
+          yAxis: { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } },
+          series
+        });
+      } else {
+        series = [{
+          name: metric,
+          type: 'line',
+          smooth: true,
+          showSymbol: values.length <= 5,
+          data: values,
+          itemStyle: { color: type === 'AREA' ? '#a371f7' : '#3fb950' },
+          areaStyle: type === 'AREA' ? { color: 'rgba(163, 113, 247, 0.25)' } : undefined
+        }];
+        chart.setOption({
+          backgroundColor: 'transparent',
+          title: statsSub ? { text: statsSub, left: 'center', top: 0, textStyle: { color: '#8b949e', fontSize: 10, fontWeight: 'normal' } } : undefined,
+          tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
+          grid: { left: '3%', right: '4%', bottom: '8%', top: statsSub ? '16%' : '10%', containLabel: true },
+          xAxis: { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#30363d' } } },
+          yAxis: { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } },
+          series
+        });
+      }
+    } catch (err) {
+      console.error('Chart rendering error:', err);
+      disposeChartOnDom(dom, instanceKey);
+      dom.innerHTML = renderErrorStateHtml('Unable to load monitoring data. Check backend connectivity.');
+    }
   }
 
   /* ── View 4: Visualization Studio ───────────────────────────────────────── */
   async function initStudio() {
-    // Populate monitors dropdown
+    if (cachedMonitors.length === 0) {
+      try { cachedMonitors = await window.apiClient.getMonitors(); } catch (_) {}
+    }
+    if (cachedDashboards.length === 0) {
+      try { cachedDashboards = await window.apiClient.getDashboards(); } catch (_) {}
+    }
+
     const monSel = document.getElementById('studio-monitor');
-    if (monSel && cachedMonitors.length > 0) {
+    if (monSel) {
       monSel.innerHTML = '<option value="">All Services (Fleet Aggregated)</option>' +
         cachedMonitors.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
     }
 
-    // Populate dashboard target dropdown
     const dashSel = document.getElementById('studio-target-dashboard');
-    if (dashSel && cachedDashboards.length > 0) {
+    if (dashSel) {
       dashSel.innerHTML = cachedDashboards.map(d => `<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('');
     }
 
@@ -589,12 +1032,6 @@
   window.updateStudioPreview = async function () {
     const dom = document.getElementById('studio-echarts-canvas');
     if (!dom || typeof echarts === 'undefined') return;
-
-    let chart = echartsInstances['studio-preview'];
-    if (!chart) {
-      chart = echarts.init(dom, 'dark');
-      echartsInstances['studio-preview'] = chart;
-    }
 
     const metric = document.getElementById('studio-metric')?.value || 'RESPONSE_TIME';
     const type = document.getElementById('studio-type')?.value || 'TIME_SERIES';
@@ -606,92 +1043,13 @@
       titleEl.textContent = `Preview: ${type} of ${metric} (${range})`;
     }
 
-    // Handle NOT_CONNECTED host metrics
-    if (metric === 'HOST_CPU' || metric === 'HOST_RAM') {
-      chart.clear();
-      dom.innerHTML = '<div style="display:flex; height:100%; align-items:center; justify-content:center; flex-direction:column; color:var(--color-degraded); text-align:center; padding:20px;">' +
-        '<strong style="font-size:14px; margin-bottom:6px;">REMOTE HOST METRIC NOT AVAILABLE</strong>' +
-        '<span>External monitored websites do not expose remote CPU or RAM without an authenticated telemetry agent installed on the target host.</span>' +
-        '</div>';
-      return;
-    }
-
-    // Fetch timeseries data from backend
-    const tsData = await window.apiClient.getAnalyticsTimeseries({ monitorId: monId, metric, range });
-    const times = tsData.timestamps && tsData.timestamps.length > 0 ? tsData.timestamps.map(t => formatShortTime(t)) : ['10:00', '11:00', '12:00', '13:00', '14:00'];
-    const values = tsData.values && tsData.values.length > 0 ? tsData.values : [38, 42, 40, 55, 48];
-
-    let option = {
-      backgroundColor: 'transparent',
-      tooltip: { trigger: 'axis', backgroundColor: '#161b22', borderColor: '#30363d', textStyle: { color: '#f0f6fc' } },
-      grid: { left: '3%', right: '4%', bottom: '8%', top: '10%', containLabel: true }
-    };
-
-    if (type === 'GAUGE') {
-      const latestVal = values[values.length - 1] || 50;
-      option = {
-        backgroundColor: 'transparent',
-        series: [{
-          type: 'gauge',
-          startAngle: 180,
-          endAngle: 0,
-          min: 0,
-          max: 200,
-          radius: '90%',
-          progress: { show: true, width: 14, itemStyle: { color: '#58a6ff' } },
-          pointer: { show: true, length: '60%', width: 4 },
-          axisLine: { lineStyle: { width: 14, color: [[1, '#21262d']] } },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { color: '#8b949e', distance: 16, fontSize: 10 },
-          detail: { valueAnimation: true, offsetCenter: [0, '-15%'], fontSize: 24, color: '#f0f6fc', formatter: '{value}' },
-          data: [{ value: Math.round(latestVal) }]
-        }]
-      };
-    } else if (type === 'HEATMAP') {
-      const hmData = await window.apiClient.getAnalyticsHeatmap({ monitorId: monId, range });
-      option = {
-        backgroundColor: 'transparent',
-        tooltip: { position: 'top' },
-        grid: { height: '65%', top: '10%' },
-        xAxis: { type: 'category', data: hmData.hours, splitArea: { show: true } },
-        yAxis: { type: 'category', data: hmData.days, splitArea: { show: true } },
-        visualMap: { min: 20, max: 80, calculable: true, orient: 'horizontal', left: 'center', bottom: '0', inRange: { color: ['#238636', '#d29922', '#f85149'] } },
-        series: [{ type: 'heatmap', data: hmData.data, label: { show: false } }]
-      };
-    } else if (type === 'DONUT') {
-      option = {
-        backgroundColor: 'transparent',
-        tooltip: { trigger: 'item' },
-        series: [{
-          type: 'pie',
-          radius: ['45%', '70%'],
-          itemStyle: { borderRadius: 4, borderColor: '#161b22', borderWidth: 2 },
-          data: [
-            { value: 85, name: '2xx Success', itemStyle: { color: '#3fb950' } },
-            { value: 10, name: '3xx Redirect', itemStyle: { color: '#388bfd' } },
-            { value: 5, name: '4xx/5xx Errors', itemStyle: { color: '#f85149' } }
-          ]
-        }]
-      };
-    } else if (type === 'BAR_VERTICAL') {
-      option.xAxis = { type: 'category', data: times.slice(-12), axisLine: { lineStyle: { color: '#30363d' } } };
-      option.yAxis = { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } };
-      option.series = [{ type: 'bar', data: values.slice(-12), itemStyle: { color: '#58a6ff', borderRadius: [3, 3, 0, 0] } }];
-    } else {
-      option.xAxis = { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#30363d' } } };
-      option.yAxis = { type: 'value', splitLine: { lineStyle: { color: '#21262d' } } };
-      option.series = [{
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        data: values,
-        itemStyle: { color: type === 'AREA' ? '#a371f7' : '#3fb950' },
-        areaStyle: type === 'AREA' ? { color: 'rgba(163, 113, 247, 0.25)' } : undefined
-      }];
-    }
-
-    chart.setOption(option, true);
+    await renderVisualizationChart(dom, {
+      title: `Preview: ${metric}`,
+      type,
+      metric,
+      range,
+      monitorId: monId ? parseInt(monId, 10) : null
+    }, 'studio-preview');
   };
 
   window.saveStudioPanelToDashboard = async function () {

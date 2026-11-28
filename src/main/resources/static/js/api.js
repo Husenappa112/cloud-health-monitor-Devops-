@@ -128,24 +128,17 @@
     }
 
     /**
-     * Probe local Spring Boot backend (localhost:8081) as an automatic fallback
-     * when the Render production backend is offline or not yet deployed.
+     * Build clean query string, omitting null/undefined/empty values
+     * so Spring Boot @RequestParam(required = false) never receives "null".
      */
-    async tryLocalFallback() {
-      const localBase = (window.CHM_CONFIG && window.CHM_CONFIG.LOCAL_BACKEND) || 'http://localhost:8081';
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 2500);
-      try {
-        const res = await fetch(`${localBase}/health`, {
-          headers: { 'Accept': 'application/json' },
-          signal: controller.signal
-        });
-        clearTimeout(tid);
-        return res.ok;
-      } catch (_) {
-        clearTimeout(tid);
-        return false;
-      }
+    buildQueryString(params = {}) {
+      const sp = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && v !== '') {
+          sp.append(k, String(v));
+        }
+      });
+      return sp.toString();
     }
 
     /**
@@ -180,19 +173,7 @@
           throw new Error(`Request timeout: Backend at ${this.getBaseUrl()} took longer than ${this.timeoutMs / 1000}s to respond.`);
         }
 
-        // Auto-fallback from unreachable Render production URL to running local backend (localhost:8081)
-        if (this.getStoredPreset() === 'PRODUCTION' && !options._isFallbackRetry) {
-          const localAlive = await this.tryLocalFallback();
-          if (localAlive) {
-            this.setPreset('LOCAL');
-            if (typeof this.onFallbackActivated === 'function') {
-              this.onFallbackActivated('LOCAL', this.getBaseUrl());
-            }
-            return this.request(endpoint, Object.assign({}, options, { _isFallbackRetry: true }));
-          }
-        }
-
-        const helpfulMsg = `Backend unreachable at ${url} (${err.message}). Verify the Render service is deployed/running or switch to Localhost (8081) in Settings.`;
+        const helpfulMsg = `Backend unreachable at ${url} (${err.message}). Verify the Render service is deployed and running, or configure your backend URL in Settings.`;
         this.handleConnectionFailure(helpfulMsg);
         throw new Error(helpfulMsg);
       } finally {
@@ -419,18 +400,23 @@
 
     // Analytics & Telemetry Queries
     async getAnalyticsTimeseries(params = {}) {
-      const qs = new URLSearchParams(params).toString();
+      const qs = this.buildQueryString(params);
       return this.request(`/api/analytics/timeseries${qs ? '?' + qs : ''}`);
     }
 
     async getAnalyticsDistribution(params = {}) {
-      const qs = new URLSearchParams(params).toString();
+      const qs = this.buildQueryString(params);
       return this.request(`/api/analytics/distribution${qs ? '?' + qs : ''}`);
     }
 
     async getAnalyticsHeatmap(params = {}) {
-      const qs = new URLSearchParams(params).toString();
+      const qs = this.buildQueryString(params);
       return this.request(`/api/analytics/heatmap${qs ? '?' + qs : ''}`);
+    }
+
+    async getAnalyticsTimeline(params = {}) {
+      const qs = this.buildQueryString(params);
+      return this.request(`/api/analytics/timeline${qs ? '?' + qs : ''}`);
     }
 
     async getHttpInsights() {
