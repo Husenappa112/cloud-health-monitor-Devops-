@@ -1,5 +1,6 @@
 package com.mointer.cloud_health_monitor.entity;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -65,6 +66,7 @@ public class SavedDashboard {
     public void setDescription(String description) { this.description = description; }
 
     public boolean isDefault() { return Boolean.TRUE.equals(isDefault); }
+    @JsonSetter("default")
     public void setDefault(Boolean aDefault) { isDefault = aDefault != null ? aDefault : false; }
 
     public List<DashboardPanel> getPanels() { return panels; }
