@@ -36,3 +36,59 @@ groups:
         annotations:
           summary: "High JVM heap usage"
           description: "JVM heap usage exceeded 80%."
+
+  - name: monitored-url-health-alerts
+    rules:
+      - alert: MonitoredServiceDown
+        expr: monitored_service_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitored URL service is DOWN: {{ $labels.service }}"
+          description: "Target URL service {{ $labels.service }} is unreachable, returned an error status, or failed connectivity checks."
+
+      - alert: MonitoredServiceLatencyHigh
+        expr: monitored_service_response_time_seconds > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monitored URL service latency degraded: {{ $labels.service }}"
+          description: "Service {{ $labels.service }} response time is {{ $value }}s, exceeding the 2.0s threshold."
+
+      - alert: MonitoredServiceDegraded
+        expr: monitored_service_up == 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monitored URL service is DEGRADED: {{ $labels.service }}"
+          description: "Service {{ $labels.service }} is experiencing performance degradation, slow responses, or SSL warning."
+
+      - alert: SslCertificateExpiringSoon
+        expr: monitored_service_ssl_expiry_days > 0 and monitored_service_ssl_expiry_days < 7
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL certificate expiring soon for {{ $labels.service }}"
+          description: "SSL certificate for service {{ $labels.service }} expires in {{ $value }} days."
+
+      - alert: SslCertificateExpired
+        expr: monitored_service_ssl_expiry_days == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSL certificate EXPIRED for {{ $labels.service }}"
+          description: "SSL certificate for service {{ $labels.service }} has expired! Immediate renewal required."
+
+      - alert: DnsLookupLatencyHigh
+        expr: monitored_service_dns_lookup_seconds > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DNS resolution slow for {{ $labels.service }}"
+          description: "DNS resolution duration for service {{ $labels.service }} is {{ $value }}s, exceeding 500ms."

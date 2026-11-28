@@ -1,560 +1,128 @@
-# Cloud-Based Application Health Monitoring REST API
+# Cloud Health Monitor 🌐⚡
 
-> **A production-quality Spring Boot 4 REST API** that monitors the health of registered services in real time.
-
----
-
-## Table of Contents
-
-1. [Project Overview](#project-overview)
-2. [Problem Statement](#problem-statement)
-3. [Architecture](#architecture)
-4. [Features](#features)
-5. [Technology Stack](#technology-stack)
-6. [API Documentation](#api-documentation)
-7. [Local Setup](#local-setup)
-8. [Maven Commands](#maven-commands)
-9. [Testing](#testing)
-10. [Git Workflow](#git-workflow)
-11. [Jenkins Pipeline](#jenkins-pipeline)
-12. [Docker](#docker)
-13. [Ansible](#ansible)
-14. [Kubernetes](#kubernetes)
-15. [Screenshot Checklist](#screenshot-checklist)
+> **Production-Grade Observability & Availability Platform (Grafana / Datadog-Style Dark Theme)**  
+> *Engineered with Java 21, Spring Boot 4, PostgreSQL / H2, Prometheus, Grafana, Alertmanager, Docker, Kubernetes, Vercel & Render.*
 
 ---
 
-## Project Overview
-
-Cloud Health Monitor is a RESTful API built with Spring Boot 4 that lets you:
-
-- Register services by name and URL
-- Perform real HTTP health checks against registered services
-- View aggregated monitoring metrics
-- Integrate with CI/CD, containerisation, and orchestration tooling
+## 📌 Live Deployments & Repository
+- **Production Frontend (Vercel):** [https://cloud-health-monitor-ui.vercel.app](https://cloud-health-monitor-ui.vercel.app)
+- **Production Backend (Render):** `https://cloud-health-monitor-devops.onrender.com`
+- **GitHub Repository:** [Husenappa112/cloud-health-monitor-Devops-](https://github.com/Husenappa112/cloud-health-monitor-Devops-)
+- **Active Working Branch:** `develop`
 
 ---
 
-## Problem Statement
+## 🚀 Overview
 
-Modern microservice architectures consist of dozens to hundreds of independent services. Without centralised health monitoring, teams discover failures only after users report them. This project provides a lightweight health-monitoring API that checks every registered service, records response times, and surfaces aggregated metrics — without a database, without external infrastructure, and without fake data.
+**Cloud Health Monitor** is an enterprise-grade synthetic observability and URL availability platform inspired by modern Datadog and Grafana dark interfaces. It empowers SREs, DevOps engineers, and full-stack developers to register publicly accessible HTTP/HTTPS services (e.g. `https://google.com`, `https://github.com`, custom APIs) and continuously monitor availability, latency percentiles (P50, P90, P95, P99), DNS lookup duration, SSL/TLS certificate chains, and incident lifecycles across distributed networks.
+
+### Key Capabilities
+- **Grafana-Style Observability UI:** High-density dark charcoal aesthetic (`#080c14`, `#161b22`, subtle `#30363d` panel borders) designed for mission-critical monitoring wallboards and NOC consoles.
+- **10 Dedicated Observability Views:**
+  1. **Overview:** High-level system KPIs, live monitor telemetry, HTTP status distribution bar, and active alert feeds.
+  2. **Monitors:** Complete registered service inventory with live search, status filtering (ALL, UP, DEGRADED, DOWN, PAUSED), custom sorting, and per-monitor actions (Immediate Re-check, Pause/Resume, Parameter Edit, Deletion, and 14-Metric Deep Inspection).
+  3. **HTTP Insights:** Aggregated synthetic probe metrics, HTTP status code distribution (2xx/3xx/4xx/5xx), latency percentiles (P50 Median, P90, P95, P99, Min, Max), connection timeouts, socket failures, and DNS/SSL error counts. Explicitly labeled as synthetic probe telemetry rather than visitor traffic.
+  4. **Infrastructure:** Real JVM runtime telemetry (Heap used/max/utilization %, Non-Heap, Available Processors, System Load, Active/Peak Threads, Uptime) and explicit `NOT_CONNECTED` host status clarifying that external targets require an authenticated agent to expose host-level CPU/RAM.
+  5. **Incidents:** Full incident lifecycle state machine (`OPEN` $\rightarrow$ `ACKNOWLEDGED` $\rightarrow$ `RESOLVED`) with severity classification (`CRITICAL`, `WARNING`, `INFO`), operator investigation notes, and downtime SLA duration tracking.
+  6. **Alerts:** Real-time threshold evaluation displaying active alerts (Outages, Latency Degradation > 2000ms, SSL Expiry $\le$ 14 days).
+  7. **SSL Certificates:** Security posture dashboard showing certificate validity, Certificate Authority (CA) issuers, expiration dates, days remaining countdowns, and TLS protocol encryption.
+  8. **Analytics:** Rolling SLA availability compliance (24-hour, 7-day, 30-day uptime %), average latency, and check totals.
+  9. **Event Log:** Chronological audit trail of service state changes, outage detections, operator acknowledgments, and automated recoveries.
+  10. **Settings:** Runtime API base URL configuration, live backend ping testing, and Prometheus/Actuator endpoint direct navigation.
+- **Resilient Frontend Architecture:** Battle-tested API client (`frontend/js/api.js`) that detects Render free-tier cold-starts, handles 502/503/504 gateway responses gracefully, provides configurable timeout aborting, and prevents raw non-JSON syntax errors (`Unexpected token 'T'`).
+- **14 Core Health Metrics:** Captures HTTP status, latency, DNS lookup, SSL days remaining, certificate issuer, TLS validity, connection state, redirect tracking, consecutive failures, 24h/7d/30d uptime %, and downtime duration.
+- **SSRF Defense-in-Depth:** Rejects IPv4/IPv6 loopback (`127.0.0.0/8`), RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local/cloud metadata (`169.254.169.254`), and IPv6 ULA/link-local addresses with safe redirect evaluation.
+- **Dual-Tree Parity:** 100% synchronization across root module and `cloud-health-monitor/` child module, with all 40 unit and integration tests passing.
 
 ---
 
-## Architecture
+## 🏗️ System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    REST Clients / curl                       │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTP
-┌──────────────────────────▼──────────────────────────────────┐
-│               Spring Boot 4 Application (port 8081)         │
-│                                                             │
-│  ┌──────────────┐  ┌──────────────────┐  ┌──────────────┐  │
-│  │ Health       │  │ Services         │  │ Metrics      │  │
-│  │ Controller   │  │ Controller       │  │ Controller   │  │
-│  └──────┬───────┘  └────────┬─────────┘  └──────┬───────┘  │
-│         │                   │                    │          │
-│         │          ┌────────▼─────────┐          │          │
-│         │          │ ServiceRegistry  │◄─────────┘          │
-│         │          │ (ConcurrentMap)  │                     │
-│         │          └────────┬─────────┘                     │
-│         │                   │                               │
-│         │          ┌────────▼─────────┐                     │
-│         │          │ HealthCheck      │                     │
-│         │          │ Service          │── HTTP GET ──► external services
-│         │          └──────────────────┘                     │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Packages:**
-
-| Package      | Contents                                        |
-|--------------|-------------------------------------------------|
-| `controller` | HealthController, ServicesController, MetricsController |
-| `service`    | ServiceRegistry, HealthCheckService, MetricsService |
-| `model`      | ServiceEntry, ServiceResponse, HealthCheckResult, MetricsResponse, ApiError |
-| `exception`  | GlobalExceptionHandler, custom exception classes |
-| `config`     | Reserved for future cross-cutting configuration |
-
----
-
-## Features
-
-- ✅ Real HTTP health checks (not simulated) with configurable timeouts
-- ✅ Thread-safe in-memory service registry (`ConcurrentHashMap`)
-- ✅ URL scheme validation (http/https only)
-- ✅ Duplicate detection
-- ✅ Response time measurement in milliseconds
-- ✅ Aggregated metrics: total services, UP/DOWN/UNKNOWN counts, average response time, uptime
-- ✅ Centralised exception handling with uniform JSON error envelopes
-- ✅ Full CRUD: register, list, get, delete services
-- ✅ 15 automated JUnit integration tests (all passing)
-- ✅ Jenkins CI pipeline
-- ✅ Multi-stage Docker build with non-root user
-- ✅ Ansible role for deployment
-- ✅ Kubernetes manifests with liveness/readiness probes
-
----
-
-## Technology Stack
-
-| Component    | Technology              | Version     |
-|--------------|-------------------------|-------------|
-| Language     | Java                    | 17 (JDK 21) |
-| Framework    | Spring Boot             | 4.1.2       |
-| Build        | Apache Maven            | 3.9.9       |
-| Testing      | JUnit Jupiter           | 6.x         |
-| Assertions   | AssertJ                 | 3.27.x      |
-| Container    | Docker (multi-stage)    | latest      |
-| Orchestration| Kubernetes / Minikube   | ≥ 1.28      |
-| CI/CD        | Jenkins                 | ≥ 2.414     |
-| Config Mgmt  | Ansible                 | ≥ 2.12      |
-
----
-
-## API Documentation
-
-### GET /health
-
-Returns the application status.
-
-```bash
-curl http://localhost:8081/health
-```
-
-```json
-{
-  "status": "UP",
-  "application": "Cloud Health Monitor"
-}
+[ Web Browser / Operator ]
+        │
+        ├── (HTTPS) ──► [ Vercel Production Global Edge ]
+        │                   └─► High-Density Observability Dashboard (HTML5 / CSS3 / ES6)
+        │
+        └── (REST / JSON) ──► [ Spring Boot 4 Backend Engine (Java 21) ]
+                                    │
+               ┌────────────────────┼────────────────────┐
+               ▼                    ▼                    ▼
+     [ SSRF Validator ]    [ DNS Inspector ]    [ SSL Inspector ]
+               │                    │                    │
+               └────────────────────┬────────────────────┘
+                                    │
+                                    ▼
+                        [ Java 21 HTTP/2 Client ]
+                                    │
+                                    ▼
+                       [ Public Monitored Target ]
+                                    │
+                                    ▼
+       ┌────────────────────────────┴────────────────────────────┐
+       ▼                                                         ▼
+[ PostgreSQL / H2 Database ]                              [ Prometheus / Grafana ]
+  - monitored_services                                      - monitored_service_up
+  - health_check_records                                    - monitored_service_response_time_seconds
+  - incidents                                               - monitored_service_ssl_expiry_days
 ```
 
 ---
 
-### GET /services
+## 📊 Captured Health & Performance Metrics (14 Total)
 
-Returns all registered services.
-
-```bash
-curl http://localhost:8081/services
-```
-
-```json
-[
-  {
-    "name": "Payment API",
-    "url": "https://example.com",
-    "status": "UP",
-    "httpStatus": 200,
-    "responseTimeMs": 42,
-    "checkedAt": "2026-11-09T11:00:00Z"
-  }
-]
-```
+| # | Metric Name | Description | Output Example |
+|---|---|---|---|
+| 1 | **Current Status** | Primary health classification | `UP`, `DEGRADED`, `DOWN`, `UNKNOWN` |
+| 2 | **HTTP Status Code** | Response status code received | `200`, `301`, `404`, `500` |
+| 3 | **Response Time** | Total round-trip latency in milliseconds | `42 ms` |
+| 4 | **DNS Status** | Hostname DNS resolution result | `RESOLVED`, `FAILED`, `SKIPPED` |
+| 5 | **DNS Lookup Time** | Duration required for DNS resolution | `12 ms` |
+| 6 | **Connection Status** | TCP socket & handshake status | `CONNECTED`, `TIMED_OUT`, `SSRF_BLOCKED` |
+| 7 | **TLS/SSL Validity** | Whether certificate is valid & trusted | `true` / `false` |
+| 8 | **SSL Days Remaining** | Days before TLS certificate expires | `84 days` |
+| 9 | **SSL Expiry Date** | Exact timestamp of certificate expiration | `2027-02-19T00:00:00Z` |
+| 10 | **SSL Issuer** | Certificate Authority / CN issuer | `GTS CA 1C3` |
+| 11 | **Redirect Count** | Number of HTTP redirects followed | `1` (e.g. `http` $\rightarrow$ `https`) |
+| 12 | **Final URL** | Destination URL after safe redirects | `https://www.google.com` |
+| 13 | **Consecutive Failures** | Consecutive failed check attempts | `0` (resets on `UP`) |
+| 14 | **Uptime & Downtime** | Rolling 24h/7d/30d uptime % and downtime seconds | `99.98%`, `0s downtime` |
 
 ---
 
-### POST /services
+## 🛠️ Technology Stack
 
-Register a new service.
-
-```bash
-curl -X POST http://localhost:8081/services \
-     -H "Content-Type: application/json" \
-     -d '{"name":"Payment API","url":"https://example.com"}'
-```
-
-**Success (201 Created):**
-```json
-{
-  "name": "Payment API",
-  "url": "https://example.com",
-  "status": "UNKNOWN",
-  "httpStatus": null,
-  "responseTimeMs": null,
-  "checkedAt": null
-}
-```
-
-**Duplicate (409 Conflict):**
-```json
-{"status":409,"error":"Conflict","message":"Service already registered: Payment API","timestamp":"..."}
-```
-
-**Bad Request (400):**
-```json
-{"status":400,"error":"Bad Request","message":"Service URL must start with http:// or https://","timestamp":"..."}
-```
+- **Backend:** Java 21, Spring Boot 4.1.2, Spring Data JPA, Hibernate ORM 7.x, Micrometer
+- **Security:** Custom SSRF Validator with CIDR matching, InetAddress resolution, and Redirect.NEVER enforcement
+- **Database:** PostgreSQL (Production / Render) and H2 in-memory (Test & Local Development)
+- **Frontend:** Responsive HTML5, High-density CSS3 design system, Resilient Vanilla ES6 API client
+- **Observability:** Prometheus, Grafana, Alertmanager, Micrometer Prometheus Exporter
+- **Containerization & Orchestration:** Docker multi-stage build, Kubernetes (3 replicas, NodePort 30081)
+- **CI/CD Automation:** Jenkins Declarative Pipeline, GitHub Actions CI
+- **Cloud Hosting:** Vercel (Frontend CDN), Render (Containerized Backend + Managed Postgres)
 
 ---
 
-### GET /services/{name}
-
-Get a specific service by name.
-
-```bash
-curl http://localhost:8081/services/Payment%20API
-```
-
----
-
-### DELETE /services/{name}
-
-Remove a service from the registry.
-
-```bash
-curl -X DELETE http://localhost:8081/services/Payment%20API
-# 204 No Content
-```
-
----
-
-### GET /services/{name}/health
-
-Perform a live HTTP health check against the service URL.
-
-```bash
-curl http://localhost:8081/services/Payment%20API/health
-```
-
-```json
-{
-  "name": "Payment API",
-  "url": "https://example.com",
-  "status": "UP",
-  "httpStatus": 200,
-  "responseTimeMs": 35,
-  "checkedAt": "2026-11-09T11:00:00Z"
-}
-```
-
----
-
-### POST /services/{name}/health
-
-Force a re-check of a service (same response format as GET above).
-
----
-
-### GET /metrics
-
-Real monitoring statistics.
-
-```bash
-curl http://localhost:8081/metrics
-```
-
-```json
-{
-  "totalServices": 3,
-  "upServices": 2,
-  "downServices": 1,
-  "unknownServices": 0,
-  "totalChecksPerformed": 15,
-  "averageResponseTimeMs": 48.3,
-  "applicationUptimeSeconds": 3600
-}
-```
-
----
-
-## Local Setup
+## ⚡ Quickstart — Local Development
 
 ### Prerequisites
+- JDK 21 or higher
+- Maven 3.9+ (or use included `./mvnw`)
+- Git
 
-- Java 17+ (JDK 21 installed)
-- Maven (or use the included wrapper `./mvnw`)
-
-### Run the application
-
-```powershell
-cd cloud-health-monitor\cloud-health-monitor
-.\mvnw.cmd spring-boot:run
-```
-
-**On Linux/WSL:**
+### Build & Run Locally
 ```bash
-cd cloud-health-monitor/cloud-health-monitor
+# Clone the repository
+git clone https://github.com/Husenappa112/cloud-health-monitor-Devops-.git
+cd cloud-health-monitor-Devops-
+git checkout develop
+
+# Run the test suite (40 tests)
+./mvnw clean test
+
+# Run the application
 ./mvnw spring-boot:run
 ```
 
-Application starts at **http://localhost:8081**
-
----
-
-## Maven Commands
-
-```bash
-# Clean build
-./mvnw clean
-
-# Compile only
-./mvnw compile
-
-# Run tests
-./mvnw test
-
-# Package JAR
-./mvnw package -DskipTests
-
-# Full build + test
-./mvnw clean verify
-
-# Run the JAR directly
-java -jar target/cloud-health-monitor-0.0.1-SNAPSHOT.jar
-```
-
----
-
-## Testing
-
-```bash
-./mvnw clean test
-```
-
-**Test coverage:**
-| Test | Description |
-|------|-------------|
-| `getHealth_returnsUp` | Verifies /health returns status UP |
-| `getServices_emptyRegistry_returnsEmptyArray` | Empty list on startup |
-| `postServices_validRequest_returnsCreated` | 201 on valid registration |
-| `postServices_duplicateName_returnsConflict` | 409 on duplicate |
-| `postServices_missingName_returnsBadRequest` | 400 on blank name |
-| `postServices_invalidUrlScheme_returnsBadRequest` | 400 on ftp:// scheme |
-| `getServiceByName_exists_returnsService` | 200 with correct data |
-| `getServiceByName_notFound_returns404` | 404 on unknown service |
-| `deleteService_exists_returnsNoContent` | 204 and service removed |
-| `checkHealth_upService_returnsUp` | Real HTTP 200 → UP |
-| `checkHealth_downService_returnsDown` | Real HTTP 503 → DOWN |
-| `checkHealth_unknownService_returns404` | 404 on unknown service |
-| `getMetrics_returnsRealStats` | Real metrics after a check |
-| `getServices_multipleServices_returnsAll` | Lists all services |
-| `contextLoads` | Spring context starts |
-
----
-
-## Git Workflow
-
-```bash
-# Inspect status
-git status
-git log --oneline
-
-# Create develop branch
-git checkout -b develop
-
-# Create a feature branch
-git checkout -b feature/add-metrics
-
-# Make changes, then commit
-git add .
-git commit -m "feat: implement GET /metrics endpoint"
-
-# Merge back to develop
-git checkout develop
-git merge --no-ff feature/add-metrics
-git branch -d feature/add-metrics
-
-# Push to GitHub
-git push origin develop
-```
-
----
-
-## Jenkins Pipeline
-
-### Required Jenkins Plugins
-
-- Pipeline
-- Git
-- JUnit (for test reports)
-- GitHub Integration (for webhooks)
-
-### JDK & Maven Configuration
-
-In **Manage Jenkins → Tools**:
-
-- **JDK**: Add JDK 21 installation (name: `JDK21`)
-- **Maven**: The pipeline uses Maven installed at `/tmp/maven`; adjust `MAVEN_HOME` in `Jenkinsfile` as required
-
-### Pipeline Setup
-
-1. **New Item** → Pipeline
-2. Definition: **Pipeline script from SCM**
-3. SCM: Git, Repository URL: `https://github.com/<user>/cloud-health-monitor.git`
-4. Script Path: `Jenkinsfile`
-5. Save → **Build Now**
-
-### Webhook (GitHub → Jenkins)
-
-```
-GitHub repo → Settings → Webhooks → Add webhook
-Payload URL : http://<JENKINS_HOST>:8080/github-webhook/
-Content type: application/json
-Events      : Just the push event
-```
-
-### Verify Build
-
-```bash
-# Check archived artifact (replace BUILD_NUMBER)
-ls $JENKINS_HOME/jobs/cloud-health-monitor/builds/<BUILD_NUMBER>/archive/
-```
-
----
-
-## Docker
-
-### Build
-
-```bash
-# From the project root (where Dockerfile lives)
-docker build -t cloud-health-monitor:latest .
-```
-
-### Run
-
-```bash
-docker run -d \
-  --name cloud-health-monitor \
-  -p 8081:8081 \
-  cloud-health-monitor:latest
-```
-
-### Commands
-
-```bash
-# Check status
-docker ps --filter name=cloud-health-monitor
-
-# View logs
-docker logs cloud-health-monitor
-
-# Test health
-curl http://localhost:8081/health
-
-# Stop and remove
-docker stop cloud-health-monitor
-docker rm cloud-health-monitor
-```
-
----
-
-## Ansible
-
-> **Note:** Ansible does not run natively on Windows. Run these commands inside **WSL** (Ubuntu/Debian) or on a Linux control node.
-
-### Install Ansible (WSL)
-
-```bash
-sudo apt update && sudo apt install -y ansible
-pip3 install docker  # for the community.docker collection
-ansible-galaxy collection install community.docker
-```
-
-### Run the playbook
-
-```bash
-cd ansible/
-
-# Check (dry run)
-ansible-playbook -i inventory.ini deploy.yml --check
-
-# Apply
-ansible-playbook -i inventory.ini deploy.yml
-```
-
-The playbook:
-1. Installs Docker
-2. Removes any existing container
-3. Runs the Docker image
-4. Verifies the `/health` endpoint
-
----
-
-## Kubernetes
-
-### Prerequisites
-
-```bash
-minikube start
-minikube status
-```
-
-### Load the Docker image into Minikube
-
-```bash
-# Build the image first
-docker build -t cloud-health-monitor:latest .
-
-# Load into Minikube
-minikube image load cloud-health-monitor:latest
-```
-
-### Deploy
-
-```bash
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-```
-
-### Check status
-
-```bash
-kubectl get pods
-kubectl get deployments
-kubectl get services
-kubectl logs deployment/cloud-health-monitor
-```
-
-### Access the application
-
-```bash
-minikube service cloud-health-monitor --url
-# or
-kubectl port-forward service/cloud-health-monitor 8081:8081
-curl http://localhost:8081/health
-```
-
-### Scaling
-
-```bash
-# Scale to 5 replicas
-kubectl scale deployment cloud-health-monitor --replicas=5
-kubectl get pods
-
-# Scale back to 3
-kubectl scale deployment cloud-health-monitor --replicas=3
-kubectl get pods
-```
-
-### Rollback
-
-```bash
-kubectl rollout undo deployment/cloud-health-monitor
-kubectl rollout status deployment/cloud-health-monitor
-```
-
----
-
-## Screenshot Checklist
-
-| # | Screenshot | Command / Action |
-|---|-----------|-----------------|
-| 1 | Application running | `curl http://localhost:8081/health` |
-| 2 | Health endpoint | Response from above |
-| 3 | Service registration | `POST /services` |
-| 4 | Service listing | `GET /services` |
-| 5 | UP health check | `GET /services/{name}/health` → UP |
-| 6 | DOWN health check | `GET /services/{name}/health` → DOWN |
-| 7 | Metrics response | `GET /metrics` |
-| 8 | Maven tests passing | `./mvnw clean test` |
-| 9 | Git branches & merge | `git log --oneline --all --graph` |
-| 10 | Jenkins success + artifact | Jenkins UI build #N |
-| 11 | Docker container running | `docker ps` |
-| 12 | Ansible playbook | `ansible-playbook deploy.yml` |
-| 13 | K8s 3 replicas | `kubectl get pods` |
-| 14 | K8s 5 replicas | `kubectl get pods` after `--replicas=5` |
-| 15 | K8s back to 3 | `kubectl get pods` after `--replicas=3` |
+Access the dashboard locally at `http://localhost:8081` or inspect Prometheus metrics at `http://localhost:8081/actuator/prometheus`.

@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Health Monitor — Observability Platform</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2358a6ff'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z'/></svg>">
+  <!-- Apache ECharts for Grafana-style Observability Visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+
+  <!-- Left Sidebar Navigation (13 Sections) -->
+  <aside class="sidebar">
+    <div class="brand-header">
+      <div class="brand-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      </div>
+      <div class="brand-title">
+        <span class="brand-name">Cloud Health</span>
+        <span class="brand-sub">Observability Suite</span>
+      </div>
+    </div>
+
+    <div class="nav-section-title">Monitoring & Telemetry</div>
+    <ul class="nav-list">
+      <li class="nav-item active" onclick="switchView('overview')">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        <span>Overview</span>
+      </li>
+      <li class="nav-item" onclick="switchView('monitors')">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span>Monitors</span>
+        <span class="nav-badge" id="nav-badge-monitors">0</span>
+      </li>
+      <li class="nav-item" onclick="switchView('dashboards')">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+        <span>Dashboards</span>
+      </li>
+      <li class="nav-item" onclick="switchView('studio')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        <span>Visualization Studio</span>
+      </li>
+      <li class="nav-item" onclick="switchView('http-insights')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+        <span>HTTP Insights</span>
+      </li>
+      <li class="nav-item" onclick="switchView('infrastructure')">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+        <span>Infrastructure</span>
+      </li>
+      <li class="nav-item" onclick="switchView('security')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        <span>Security</span>
+      </li>
+
+      <div class="nav-section-title" style="margin-top: 6px;">Incidents & Alerts</div>
+      <li class="nav-item" onclick="switchView('incidents')">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span>Incidents</span>
+        <span class="nav-badge danger" id="nav-badge-incidents" style="display: none;">0</span>
+      </li>
+      <li class="nav-item" onclick="switchView('alert-rules')">
+        <svg viewBox="0 0 24 24" fill="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        <span>Alert Rules</span>
+      </li>
+      <li class="nav-item" onclick="switchView('alert-history')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        <span>Alert History</span>
+        <span class="nav-badge warning" id="nav-badge-alerts" style="display: none;">0</span>
+      </li>
+      <li class="nav-item" onclick="switchView('ssl')">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span>SSL Certificates</span>
+      </li>
+      <li class="nav-item" onclick="switchView('events')">
+        <svg viewBox="0 0 24 24" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        <span>Events & Logs</span>
+      </li>
+      <li class="nav-item" onclick="switchView('settings')">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Settings</span>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div>Engine: <strong>Spring Boot 4 / Java 21</strong></div>
+      <div>SSRF Defense: <strong>Enforced</strong></div>
+      <div>Charts: <strong>Apache ECharts 5</strong></div>
+    </div>
+  </aside>
+
+  <!-- Main Viewport -->
+  <main class="main-wrapper">
+    <!-- Top Header Bar -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <div class="view-title-wrap">
+          <span class="view-title" id="page-title">Monitoring Overview</span>
+          <span class="view-subtitle" id="page-subtitle">Real-time availability and performance telemetry</span>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <!-- Backend Status Pill -->
+        <div class="status-pill" onclick="openModal('backend-modal')" title="Click to inspect backend connection">
+          <span class="status-dot" id="api-status-dot"></span>
+          <span id="api-endpoint-label">Connecting...</span>
+        </div>
+
+        <!-- Auto-Refresh Selector -->
+        <select id="refresh-interval-select" class="form-control" onchange="onIntervalChange()" title="Auto-refresh cadence" style="padding: 4px 8px; font-size: 11px;">
+          <option value="5000">Auto: 5s</option>
+          <option value="10000" selected>Auto: 10s</option>
+          <option value="15000">Auto: 15s</option>
+          <option value="30000">Auto: 30s</option>
+          <option value="60000">Auto: 60s</option>
+          <option value="0">Auto: Paused</option>
+        </select>
+
+        <!-- Refresh Button -->
+        <button class="btn btn-secondary btn-sm" id="btn-refresh" onclick="refreshCurrentView()" title="Refresh telemetry">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          Refresh
+        </button>
+
+        <!-- Add Monitor Button -->
+        <button class="btn btn-primary btn-sm" onclick="openModal('add-modal')">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add Monitor
+        </button>
+      </div>
+    </header>
+
+    <!-- Warmup / Reconnection Banner -->
+    <div id="warmup-banner" class="warmup-banner">
+      <div class="warmup-banner-content">
+        <div class="spinner"></div>
+        <span id="warmup-msg">Backend is waking up (Render free tier cold start). Querying again in a moment...</span>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-sm btn-ghost" onclick="selectBackendPreset('LOCAL')" style="color: #63b3ed;">Use Localhost (8081)</button>
+        <button class="btn btn-sm btn-ghost" onclick="switchView('settings')" style="color: #cbd5e0;">Settings</button>
+        <button class="btn btn-sm btn-ghost" onclick="refreshCurrentView()" style="color: #fbd38d;">Retry Now</button>
+      </div>
+    </div>
+
+    <!-- Workspace Scroll Area -->
+    <div class="content-scroll">
+
+      <!-- ==================================================================
+           1. VIEW: OVERVIEW
+           ================================================================== -->
+      <section id="view-overview">
+        <div class="kpi-grid">
+          <div class="kpi-card accent">
+            <span class="kpi-label">Total Monitors</span>
+            <span class="kpi-value" id="kpi-total">0</span>
+            <span class="kpi-sub">Registered endpoints</span>
+          </div>
+          <div class="kpi-card up">
+            <span class="kpi-label">Operational (UP)</span>
+            <span class="kpi-value" id="kpi-up">0</span>
+            <span class="kpi-sub">Healthy HTTP 2xx</span>
+          </div>
+          <div class="kpi-card degraded">
+            <span class="kpi-label">Degraded</span>
+            <span class="kpi-value" id="kpi-degraded">0</span>
+            <span class="kpi-sub">Slow / SSL warning</span>
+          </div>
+          <div class="kpi-card down">
+            <span class="kpi-label">Outage (DOWN)</span>
+            <span class="kpi-value" id="kpi-down">0</span>
+            <span class="kpi-sub">Unreachable / 5xx</span>
+          </div>
+          <div class="kpi-card paused">
+            <span class="kpi-label">Paused</span>
+            <span class="kpi-value" id="kpi-paused">0</span>
+            <span class="kpi-sub">Disabled monitors</span>
+          </div>
+          <div class="kpi-card up">
+            <span class="kpi-label">Overall Uptime</span>
+            <span class="kpi-value" id="kpi-uptime">100.0%</span>
+            <span class="kpi-sub">Fleet availability</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Avg Latency</span>
+            <span class="kpi-value" id="kpi-latency">0 ms</span>
+            <span class="kpi-sub">Mean response time</span>
+          </div>
+          <div class="kpi-card down">
+            <span class="kpi-label">Active Incidents</span>
+            <span class="kpi-value" id="kpi-incidents">0</span>
+            <span class="kpi-sub">Open & Acknowledged</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              Live Service Status & Response Timings
+            </span>
+            <button class="btn btn-ghost btn-sm" onclick="switchView('monitors')">View All &rarr;</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Service</th>
+                  <th>Target URL</th>
+                  <th>HTTP Code</th>
+                  <th>Latency</th>
+                  <th>DNS</th>
+                  <th>SSL Days</th>
+                  <th>Availability</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="overview-monitors-tbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 24px;">Loading monitors telemetry...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2 Column Overview Analytics -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Fleet Response Latency Trend</span>
+              <button class="btn btn-ghost btn-sm" onclick="switchView('studio')">Open Studio &rarr;</button>
+            </div>
+            <div class="panel-body">
+              <div id="overview-latency-chart" class="echarts-box" style="height: 220px;"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">HTTP Status Code Distribution</span>
+              <button class="btn btn-ghost btn-sm" onclick="switchView('http-insights')">Deep Dive &rarr;</button>
+            </div>
+            <div class="panel-body">
+              <div id="overview-donut-chart" class="echarts-box" style="height: 220px;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           2. VIEW: MONITORS
+           ================================================================== -->
+      <section id="view-monitors" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Registered Monitored Endpoints</span>
+            <div class="panel-actions">
+              <input type="text" id="monitors-search" placeholder="Filter by name or URL..." class="form-control" style="width: 200px;" oninput="applyMonitorsFilter()">
+              <select id="monitors-filter-status" class="form-control" onchange="applyMonitorsFilter()" style="width: 130px;">
+                <option value="ALL">All Statuses</option>
+                <option value="UP">UP Only</option>
+                <option value="DEGRADED">Degraded Only</option>
+                <option value="DOWN">DOWN Only</option>
+                <option value="PAUSED">Paused Only</option>
+              </select>
+              <select id="monitors-sort" class="form-control" onchange="applyMonitorsFilter()" style="width: 140px;">
+                <option value="default">Sort: Default</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="latency">Latency (Fastest)</option>
+                <option value="uptime">Uptime (Highest)</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Service Name</th>
+                  <th>Target URL</th>
+                  <th>HTTP Code</th>
+                  <th>Latency</th>
+                  <th>DNS</th>
+                  <th>SSL Expiry</th>
+                  <th>24h Uptime</th>
+                  <th>Last Checked</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="monitors-tbody">
+                <tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading endpoints...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           3. VIEW: DASHBOARDS (GRAFANA-STYLE BUILDER)
+           ================================================================== -->
+      <section id="view-dashboards" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="panel-title">Dashboard:</span>
+              <select id="dashboard-select" class="form-control" onchange="onDashboardSelectChange()" style="min-width: 220px; font-weight: 600;">
+                <option value="">Loading dashboards...</option>
+              </select>
+              <select id="dashboard-timerange" class="form-control" onchange="renderCurrentDashboard()" style="width: 145px;">
+                <option value="5m">Last 5 minutes</option>
+                <option value="15m">Last 15 minutes</option>
+                <option value="1h">Last 1 hour</option>
+                <option value="6h">Last 6 hours</option>
+                <option value="24h" selected>Last 24 hours</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-secondary btn-sm" onclick="openNewDashboardModal()">+ New Dashboard</button>
+              <button class="btn btn-secondary btn-sm" onclick="switchView('studio')">+ Add Panel</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteCurrentDashboard()">Delete Dashboard</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="dashboards-container" class="dashboard-grid">
+              <!-- Rendered dynamically by ECharts -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           4. VIEW: VISUALIZATION STUDIO
+           ================================================================== -->
+      <section id="view-studio" style="display: none;">
+        <div class="studio-grid">
+          <!-- Query & Options Sidebar -->
+          <div class="studio-form-card">
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid var(--border-default); padding-bottom: 8px;">
+              Visualization Configuration
+            </div>
+
+            <div class="form-group">
+              <label for="studio-monitor">1. Target Monitored URL</label>
+              <select id="studio-monitor" class="form-control" onchange="updateStudioPreview()">
+                <option value="">All Services (Fleet Aggregated)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="studio-metric">2. Telemetry Metric</label>
+              <select id="studio-metric" class="form-control" onchange="updateStudioPreview()">
+                <optgroup label="HTTP Telemetry">
+                  <option value="RESPONSE_TIME" selected>Response Latency (ms)</option>
+                  <option value="HTTP_CODES">HTTP Status Code Distribution</option>
+                  <option value="LATENCY_PERCENTILES">Latency Percentiles (P50/P90/P95/P99)</option>
+                  <option value="CHECKS_VOLUME">Health Check Volume</option>
+                </optgroup>
+                <optgroup label="Availability & SLA">
+                  <option value="UPTIME">Uptime Percentage (%)</option>
+                  <option value="STATUS_STATE">Operational State (UP / DOWN)</option>
+                  <option value="CONSECUTIVE_FAILURES">Consecutive Failure Count</option>
+                </optgroup>
+                <optgroup label="Network & Security">
+                  <option value="DNS_LOOKUP">DNS Lookup Duration (ms)</option>
+                  <option value="SSL_DAYS">SSL Certificate Days Remaining</option>
+                </optgroup>
+                <optgroup label="Infrastructure">
+                  <option value="JVM_HEAP">Backend JVM Heap Memory (%)</option>
+                  <option value="JVM_THREADS">JVM Active Thread Count</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="studio-type">3. Visualization Type</label>
+              <select id="studio-type" class="form-control" onchange="updateStudioPreview()">
+                <optgroup label="Time Series">
+                  <option value="TIME_SERIES" selected>Line Chart</option>
+                  <option value="AREA">Area Chart (Filled)</option>
+                  <option value="MULTI_SERIES">Multi-Series Time Series</option>
+                </optgroup>
+                <optgroup label="Bar Charts">
+                  <option value="BAR_VERTICAL">Vertical Bar Chart</option>
+                  <option value="BAR_HORIZONTAL">Horizontal Bar Chart</option>
+                  <option value="BAR_STACKED">Stacked Bar Chart</option>
+                </optgroup>
+                <optgroup label="Distribution">
+                  <option value="HEATMAP">Hourly Latency Heatmap</option>
+                  <option value="HISTOGRAM">Latency Histogram</option>
+                </optgroup>
+                <optgroup label="Statistical & Gauges">
+                  <option value="GAUGE">Radial Dial Gauge</option>
+                  <option value="BAR_GAUGE">Bar Gauge</option>
+                  <option value="STAT">Stat Panel with Sparkline</option>
+                  <option value="PIE">Pie Chart</option>
+                  <option value="DONUT">Donut / Proportion Chart</option>
+                </optgroup>
+                <optgroup label="Special">
+                  <option value="STATUS_TIMELINE">Status Timeline Bands</option>
+                  <option value="TABLE">Data Table</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="studio-timerange">4. Time Range</label>
+              <select id="studio-timerange" class="form-control" onchange="updateStudioPreview()">
+                <option value="5m">Last 5 minutes</option>
+                <option value="15m">Last 15 minutes</option>
+                <option value="1h">Last 1 hour</option>
+                <option value="6h">Last 6 hours</option>
+                <option value="24h" selected>Last 24 hours</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="studio-panel-title">5. Panel Title</label>
+              <input type="text" id="studio-panel-title" class="form-control" placeholder="e.g. Google Response Latency">
+            </div>
+
+            <div class="form-group">
+              <label for="studio-target-dashboard">6. Target Dashboard</label>
+              <select id="studio-target-dashboard" class="form-control">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <button class="btn btn-primary" onclick="saveStudioPanelToDashboard()" style="margin-top: 6px;">
+              Add Panel to Dashboard
+            </button>
+          </div>
+
+          <!-- Studio Live Preview Canvas -->
+          <div class="studio-preview-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-default); padding-bottom: 10px; margin-bottom: 14px;">
+              <span style="font-weight: 700; font-size: 13px;" id="studio-preview-title">Live Preview</span>
+              <span class="badge badge-accent" id="studio-preview-badge">Real-Time Data</span>
+            </div>
+            <div id="studio-echarts-canvas" style="width: 100%; height: 420px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           5. VIEW: HTTP INSIGHTS (SYNTHETIC PROBES)
+           ================================================================== -->
+      <section id="view-http-insights" style="display: none;">
+        <div class="synthetic-notice">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          <div>
+            <strong>SYNTHETIC HEALTH CHECKS NOTICE:</strong> These measurements are synthetic probes dispatched on a scheduled cadence by the Cloud Health Monitor engine to evaluate endpoint availability, TLS integrity, DNS resolution, and latency. They represent synthetic availability telemetry rather than end-user visitor traffic.
+          </div>
+        </div>
+
+        <div class="percentiles-grid">
+          <div class="percentile-box">
+            <span class="percentile-name">P50 (Median)</span>
+            <span class="percentile-val" id="p50-val">0 ms</span>
+            <span class="kpi-sub">50% probes faster</span>
+          </div>
+          <div class="percentile-box">
+            <span class="percentile-name">P90 Latency</span>
+            <span class="percentile-val" id="p90-val">0 ms</span>
+            <span class="kpi-sub">90th percentile</span>
+          </div>
+          <div class="percentile-box">
+            <span class="percentile-name">P95 Latency</span>
+            <span class="percentile-val" id="p95-val">0 ms</span>
+            <span class="kpi-sub">95th percentile</span>
+          </div>
+          <div class="percentile-box">
+            <span class="percentile-name">P99 Latency</span>
+            <span class="percentile-val" id="p99-val">0 ms</span>
+            <span class="kpi-sub">Tail latency ceiling</span>
+          </div>
+          <div class="percentile-box">
+            <span class="percentile-name">Min Latency</span>
+            <span class="percentile-val" id="pmin-val">0 ms</span>
+            <span class="kpi-sub">Fastest probe</span>
+          </div>
+          <div class="percentile-box">
+            <span class="percentile-name">Max Latency</span>
+            <span class="percentile-val" id="pmax-val">0 ms</span>
+            <span class="kpi-sub">Slowest probe</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Synthetic Probe Health & Errors</span>
+          </div>
+          <div class="panel-body">
+            <div id="http-distribution-chart" class="echarts-box" style="height: 260px;"></div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 18px; border-top: 1px solid var(--border-subtle); padding-top: 16px;">
+              <div class="infra-metric-row"><span>Total Checks Dispatched</span><strong id="insight-total" class="mono">0</strong></div>
+              <div class="infra-metric-row"><span>Probe Success Rate</span><strong id="insight-success-rate" class="mono" style="color: var(--color-up);">100%</strong></div>
+              <div class="infra-metric-row"><span>DNS Failures</span><strong id="insight-dns-failures" class="mono">0</strong></div>
+              <div class="infra-metric-row"><span>Connection Timeouts</span><strong id="insight-timeouts" class="mono">0</strong></div>
+              <div class="infra-metric-row"><span>SSL Failures</span><strong id="insight-ssl-failures" class="mono">0</strong></div>
+              <div class="infra-metric-row"><span>Socket Failures</span><strong id="insight-conn-failures" class="mono">0</strong></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           6. VIEW: INFRASTRUCTURE
+           ================================================================== -->
+      <section id="view-infrastructure" style="display: none;">
+        <div class="agent-banner">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          <div>
+            <div style="font-weight: 600; font-size: 13px; color: var(--color-degraded);">EXTERNAL MONITORED TARGETS: AGENT NOT CONNECTED</div>
+            <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">
+              Monitored external web URLs (e.g. Google, GitHub, Amazon) are observed externally via synthetic HTTP probing. Third-party hosts do not expose host-level CPU, RAM, or Disk metrics without an authenticated agent installed on their infrastructure.
+            </div>
+          </div>
+        </div>
+
+        <div class="infra-grid">
+          <div class="infra-card">
+            <div style="font-size: 13px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <span>JVM Memory Telemetry</span>
+              <span class="badge badge-up">CONNECTED</span>
+            </div>
+            <div class="infra-metric-row"><span>Heap Used</span><strong id="infra-heap-used" class="mono">0 MB</strong></div>
+            <div class="infra-metric-row"><span>Heap Maximum</span><strong id="infra-heap-max" class="mono">0 MB</strong></div>
+            <div class="infra-metric-row"><span>Heap Utilization</span><strong id="infra-heap-util" class="mono">0%</strong></div>
+            <div class="progress-bar-bg">
+              <div id="infra-heap-bar" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+            <div class="infra-metric-row" style="margin-top: 10px;"><span>Non-Heap Memory</span><strong id="infra-nonheap" class="mono">0 MB</strong></div>
+          </div>
+
+          <div class="infra-card">
+            <div style="font-size: 13px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <span>Compute & Thread Runtime</span>
+              <span class="badge badge-accent">JVM 21</span>
+            </div>
+            <div class="infra-metric-row"><span>Available Processors</span><strong id="infra-cores" class="mono">0</strong></div>
+            <div class="infra-metric-row"><span>System Load Average</span><strong id="infra-load" class="mono">0.0</strong></div>
+            <div class="infra-metric-row"><span>Active Thread Count</span><strong id="infra-threads-active" class="mono">0</strong></div>
+            <div class="infra-metric-row"><span>Peak Thread Count</span><strong id="infra-threads-peak" class="mono">0</strong></div>
+            <div class="infra-metric-row"><span>Backend Uptime</span><strong id="infra-uptime" class="mono">0s</strong></div>
+          </div>
+
+          <div class="infra-card">
+            <div style="font-size: 13px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <span>External Host Telemetry</span>
+              <span class="badge badge-down">NOT_CONNECTED</span>
+            </div>
+            <div class="infra-metric-row"><span>Host CPU Utilization</span><span class="badge badge-unknown">N/A (Agent Required)</span></div>
+            <div class="infra-metric-row"><span>Host RAM Utilization</span><span class="badge badge-unknown">N/A (Agent Required)</span></div>
+            <div class="infra-metric-row"><span>Disk I/O Utilization</span><span class="badge badge-unknown">N/A (Agent Required)</span></div>
+            <div class="infra-metric-row"><span>Synthetic Probing Layer</span><strong class="mono" style="color: var(--color-up);">ACTIVE</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           7. VIEW: SECURITY
+           ================================================================== -->
+      <section id="view-security" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Passive Security & SSRF Defense-in-Depth</span>
+          </div>
+          <div class="panel-body">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+              <div class="infra-card">
+                <div style="font-weight: 700; font-size: 13px; margin-bottom: 10px;">SSRF Protection Status</div>
+                <div class="infra-metric-row"><span>Status</span><span class="badge badge-up">ACTIVE_ENFORCED</span></div>
+                <div class="infra-metric-row"><span>Redirect Policy</span><strong class="mono">NEVER (Manual Audit)</strong></div>
+                <div class="infra-metric-row"><span>Cloud Metadata Blocking</span><span class="badge badge-up">PROTECTED (169.254.169.254)</span></div>
+                <div class="infra-metric-row"><span>Private RFC1918 Ranges</span><span class="badge badge-up">BLOCKED (10/8, 172.16/12, 192.168/16)</span></div>
+              </div>
+
+              <div class="infra-card">
+                <div style="font-weight: 700; font-size: 13px; margin-bottom: 10px;">Security Headers Audit</div>
+                <div class="infra-metric-row"><span>Strict-Transport-Security (HSTS)</span><span class="badge badge-up">INSPECTED</span></div>
+                <div class="infra-metric-row"><span>Content-Security-Policy (CSP)</span><span class="badge badge-up">INSPECTED</span></div>
+                <div class="infra-metric-row"><span>X-Frame-Options</span><span class="badge badge-up">INSPECTED</span></div>
+                <div class="infra-metric-row"><span>X-Content-Type-Options</span><span class="badge badge-up">INSPECTED</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           8. VIEW: INCIDENTS (LIFECYCLE)
+           ================================================================== -->
+      <section id="view-incidents" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Incident Lifecycle Tracking (OPEN &rarr; ACKNOWLEDGED &rarr; RESOLVED)</span>
+            <div class="panel-actions">
+              <select id="incidents-filter-status" class="form-control" onchange="fetchIncidents()" style="width: 160px;">
+                <option value="">All Incidents</option>
+                <option value="OPEN">OPEN Only</option>
+                <option value="ACKNOWLEDGED">ACKNOWLEDGED Only</option>
+                <option value="RESOLVED">RESOLVED Only</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Incident ID</th>
+                  <th>Severity</th>
+                  <th>Service</th>
+                  <th>Incident Title / Cause</th>
+                  <th>Status</th>
+                  <th>Started At</th>
+                  <th>Duration</th>
+                  <th>Notes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="incidents-tbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading incidents...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           9. VIEW: ALERT RULES
+           ================================================================== -->
+      <section id="view-alert-rules" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Configured Alert Rules</span>
+            <button class="btn btn-primary btn-sm" onclick="openCreateRuleModal()">+ Create Alert Rule</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Rule Name</th>
+                  <th>Target Monitor</th>
+                  <th>Metric Trigger</th>
+                  <th>Condition</th>
+                  <th>Threshold</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="alert-rules-tbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading alert rules...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           10. VIEW: ALERT HISTORY
+           ================================================================== -->
+      <section id="view-alert-history" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Alert Firing & Recovery History</span>
+            <div class="panel-actions">
+              <select id="alert-history-filter" class="form-control" onchange="fetchAlertHistory()" style="width: 140px;">
+                <option value="">All Alerts</option>
+                <option value="FIRING">FIRING Only</option>
+                <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                <option value="RESOLVED">RESOLVED</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Alert ID</th>
+                  <th>Severity</th>
+                  <th>Rule Name</th>
+                  <th>Service</th>
+                  <th>Status</th>
+                  <th>Trigger Reason</th>
+                  <th>Triggered At</th>
+                  <th>Resolved At</th>
+                  <th>Notification</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="alert-history-tbody">
+                <tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading alert history...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           11. VIEW: SSL CERTIFICATES
+           ================================================================== -->
+      <section id="view-ssl" style="display: none;">
+        <div class="kpi-grid">
+          <div class="kpi-card accent">
+            <span class="kpi-label">HTTPS Endpoints</span>
+            <span class="kpi-value" id="ssl-kpi-https">0</span>
+            <span class="kpi-sub">Encrypted endpoints</span>
+          </div>
+          <div class="kpi-card up">
+            <span class="kpi-label">Valid Certificates</span>
+            <span class="kpi-value" id="ssl-kpi-valid">0</span>
+            <span class="kpi-sub">Trusted SSL certs</span>
+          </div>
+          <div class="kpi-card degraded">
+            <span class="kpi-label">Expiring Soon</span>
+            <span class="kpi-value" id="ssl-kpi-expiring">0</span>
+            <span class="kpi-sub">&le; 14 days remaining</span>
+          </div>
+          <div class="kpi-card down">
+            <span class="kpi-label">Expired / Invalid</span>
+            <span class="kpi-value" id="ssl-kpi-expired">0</span>
+            <span class="kpi-sub">Action required</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">SSL / TLS Certificate Posture & Expiration</span>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Service Name</th>
+                  <th>Target URL</th>
+                  <th>Issuer</th>
+                  <th>Expiry Date</th>
+                  <th>Days Remaining</th>
+                  <th>Posture</th>
+                </tr>
+              </thead>
+              <tbody id="ssl-tbody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading certificate telemetry...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           12. VIEW: EVENTS & LOGS
+           ================================================================== -->
+      <section id="view-events" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Chronological System Audit & Event Stream</span>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Severity</th>
+                  <th>Service</th>
+                  <th>Event Type</th>
+                  <th>Message</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="events-tbody">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 32px;">Loading events...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           13. VIEW: SETTINGS
+           ================================================================== -->
+      <section id="view-settings" style="display: none;">
+        <div class="panel" style="max-width: 720px;">
+          <div class="panel-header">
+            <span class="panel-title">Backend API Connection & Presets</span>
+          </div>
+          <div class="panel-body" style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="background-color: var(--color-accent-bg); border: 1px solid var(--color-accent); border-radius: var(--radius-md); padding: 10px 14px; font-size: 11.5px; color: var(--color-accent);">
+              <strong>CRITICAL ARCHITECTURE RULE:</strong> The Backend API URL is where your Cloud Health Monitor Spring Boot application is hosted (e.g. Render or localhost). It is <strong>NOT</strong> the website you want to monitor (e.g. Google, GitHub). To monitor websites, navigate to <strong>Monitors</strong> and click <strong>+ Add Monitor</strong>.
+            </div>
+
+            <div class="form-group">
+              <label>Select Active Backend Preset:</label>
+              <div class="segmented-group">
+                <button type="button" class="segmented-btn" id="btn-preset-prod" onclick="selectBackendPreset('PRODUCTION')">Production (Render)</button>
+                <button type="button" class="segmented-btn" id="btn-preset-local" onclick="selectBackendPreset('LOCAL')">Localhost (8081)</button>
+                <button type="button" class="segmented-btn" id="btn-preset-custom" onclick="selectBackendPreset('CUSTOM')">Custom URL</button>
+              </div>
+            </div>
+
+            <div class="form-group" id="custom-backend-group" style="display: none;">
+              <label for="settings-api-url">Custom Backend API URL</label>
+              <input type="text" id="settings-api-url" class="form-control" placeholder="https://your-custom-backend.onrender.com">
+              <small>Must point to a Cloud Health Monitor backend server. Monitored target URLs are rejected.</small>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn btn-secondary btn-sm" onclick="testBackendConnection()">Test Ping</button>
+              <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save Configuration</button>
+            </div>
+            <div id="settings-test-result" style="font-size: 11.5px; margin-top: 4px;"></div>
+
+            <div style="border-top: 1px solid var(--border-subtle); padding-top: 16px; margin-top: 8px;">
+              <div style="font-weight: 600; font-size: 13px; margin-bottom: 6px;">Observability Telemetry Endpoints</div>
+              <ul style="list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                <li>Prometheus Actuator Metrics: <a id="link-prometheus" href="/actuator/prometheus" target="_blank" class="mono">/actuator/prometheus</a></li>
+                <li>Backend Health Endpoint: <a id="link-health" href="/health" target="_blank" class="mono">/health</a></li>
+                <li>Synthetic HTTP Insights API: <a id="link-insights" href="/api/dashboard/http-insights" target="_blank" class="mono">/api/dashboard/http-insights</a></li>
+                <li>Infrastructure Metrics API: <a id="link-infra" href="/api/dashboard/infrastructure" target="_blank" class="mono">/api/dashboard/infrastructure</a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ====================================================================
+       MODALS
+       ==================================================================== -->
+
+  <!-- Add Monitor Modal -->
+  <div class="modal-overlay" id="add-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">Register New Monitored Endpoint</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('add-modal')">&times;</button>
+      </div>
+      <form onsubmit="submitAddMonitor(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="add-name">Service Name</label>
+            <input type="text" id="add-name" class="form-control" placeholder="e.g. Google Search" required>
+          </div>
+          <div class="form-group">
+            <label for="add-url">Target URL (HTTP / HTTPS)</label>
+            <input type="text" id="add-url" class="form-control" placeholder="google.com or https://example.com" required>
+            <small>SSRF Protected: Private IPs, loopback, and cloud metadata addresses are rejected. Scheme is auto-prepended if omitted.</small>
+          </div>
+          <div class="form-group">
+            <label for="add-interval">Monitoring Interval</label>
+            <select id="add-interval" class="form-control">
+              <option value="30">Every 30 seconds</option>
+              <option value="60" selected>Every 60 seconds (1 minute)</option>
+              <option value="120">Every 2 minutes</option>
+              <option value="300">Every 5 minutes</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('add-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-add">Add Endpoint</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Alert Rule Modal -->
+  <div class="modal-overlay" id="create-rule-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">Create Alert Rule</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('create-rule-modal')">&times;</button>
+      </div>
+      <form onsubmit="submitCreateAlertRule(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="rule-name">Rule Name</label>
+            <input type="text" id="rule-name" class="form-control" placeholder="e.g. Critical Outage Trigger" required>
+          </div>
+          <div class="form-group">
+            <label for="rule-target-monitor">Target Monitor</label>
+            <select id="rule-target-monitor" class="form-control">
+              <option value="">All Services</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="rule-metric">Metric Trigger</label>
+            <select id="rule-metric" class="form-control">
+              <option value="WEBSITE_DOWN">Website DOWN (Outage)</option>
+              <option value="RESPONSE_TIME">Response Latency (ms)</option>
+              <option value="UPTIME_PERCENTAGE">Uptime SLA Breach (%)</option>
+              <option value="SSL_EXPIRY">SSL Certificate Expiration (days)</option>
+              <option value="DNS_FAILURE">DNS Lookup Failure</option>
+              <option value="HTTP_5XX">HTTP 5xx Server Outage</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="rule-threshold">Threshold Value</label>
+            <input type="number" id="rule-threshold" class="form-control" value="1000" step="any" required>
+          </div>
+          <div class="form-group">
+            <label for="rule-severity">Severity Level</label>
+            <select id="rule-severity" class="form-control">
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="HIGH">HIGH</option>
+              <option value="WARNING" selected>WARNING</option>
+              <option value="LOW">LOW</option>
+              <option value="INFO">INFO</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('create-rule-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Rule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create New Dashboard Modal -->
+  <div class="modal-overlay" id="new-dashboard-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">Create New Dashboard</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('new-dashboard-modal')">&times;</button>
+      </div>
+      <form onsubmit="submitNewDashboard(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="dashboard-title-input">Dashboard Title</label>
+            <input type="text" id="dashboard-title-input" class="form-control" placeholder="e.g. SRE Core Observability" required>
+          </div>
+          <div class="form-group">
+            <label for="dashboard-desc-input">Description</label>
+            <input type="text" id="dashboard-desc-input" class="form-control" placeholder="Purpose and scope of this dashboard">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('new-dashboard-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Dashboard</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Backend Connection Modal (Top Bar Indicator) -->
+  <div class="modal-overlay" id="backend-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">Backend Connection & Health</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('backend-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="infra-metric-row">
+          <span>Connection Status:</span>
+          <span id="modal-conn-badge" class="badge badge-up">CONNECTED</span>
+        </div>
+        <div class="infra-metric-row">
+          <span>Active Backend URL:</span>
+          <strong id="modal-conn-url" class="mono" style="word-break: break-all;">—</strong>
+        </div>
+        <div class="infra-metric-row">
+          <span>Preset:</span>
+          <span id="modal-conn-preset" class="badge badge-accent">PRODUCTION</span>
+        </div>
+        <div id="modal-ping-output" style="font-size: 11.5px; margin-top: 8px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="testModalPing()">Test Ping</button>
+        <button type="button" class="btn btn-primary" onclick="closeModal('backend-modal'); switchView('settings');">Configure Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -13,6 +13,8 @@ target/
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
+.vercel
+.vercel/
 Thumbs.db
 
 # ── Logs ─────────────────────────────────────────────────────────────────────
@@ -44,3 +46,4 @@ monitoring/alertmanager/secrets/
 .venv/
 __pycache__/
 *.py[cod]
+*.zip

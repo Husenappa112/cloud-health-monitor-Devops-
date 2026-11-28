@@ -1,0 +1,31 @@
+# ── Runtime-only image ────────────────────────────────────────────────────────
+# Used by Jenkins CI: JAR is pre-built by Maven in the pipeline;
+# this stage only packages it into a minimal runtime image.
+# Build context: cloud-health-monitor/ subdirectory
+#   docker build -f ../Dockerfile.ci -t cloud-health-monitor:TAG .
+FROM eclipse-temurin:21-jre-alpine AS runtime
+
+LABEL maintainer="cloud-health-monitor"
+LABEL description="Cloud-Based Application Health Monitoring REST API"
+
+# Non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+WORKDIR /app
+
+# JAR path relative to the cloud-health-monitor/ build context
+COPY target/*.jar app.jar
+
+RUN chown appuser:appgroup app.jar
+
+USER appuser
+
+EXPOSE 8081
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget -qO- http://localhost:8081/health || exit 1
+
+ENTRYPOINT ["java", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-jar", "app.jar"]
