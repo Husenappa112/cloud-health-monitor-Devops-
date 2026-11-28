@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: cloud_health_monitor
+  author: cloud-health-monitor-project
+  description: Deploys the Cloud Health Monitor application via Docker
+  license: MIT
+  min_ansible_version: "2.12"
+dependencies: []

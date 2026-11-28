@@ -1,0 +1,8 @@
+---
+- name: Verify application health
+  ansible.builtin.uri:
+    url: "{{ health_check_url }}"
+    return_content: true
+    status_code: 200
+  register: health_check
+  failed_when: health_check.status != 200

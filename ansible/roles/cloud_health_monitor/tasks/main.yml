@@ -1,0 +1,32 @@
+---
+# Verify that Ansible can communicate with Docker Desktop
+- name: Verify Docker Engine connection
+  community.docker.docker_host_info:
+    docker_host: unix:///var/run/docker.sock
+  register: docker_info
+
+- name: Display Docker Engine version
+  ansible.builtin.debug:
+    msg: "Connected to Docker Engine {{ docker_info.host_info.ServerVersion }}"
+
+- name: Ensure Cloud Health Monitor container is running
+  community.docker.docker_container:
+    name: "{{ docker_container_name }}"
+    image: "{{ docker_image }}"
+    state: started
+    restart_policy: "{{ docker_restart_policy }}"
+    published_ports:
+      - "{{ docker_host_port }}:{{ app_port }}"
+    env:
+      JAVA_TOOL_OPTIONS: "{{ java_opts }}"
+  notify: Verify application health
+
+- name: Wait for application health endpoint
+  ansible.builtin.uri:
+    url: "{{ health_check_url }}"
+    status_code: 200
+    return_content: true
+  register: health_response
+  retries: "{{ health_check_retries }}"
+  delay: "{{ health_check_delay }}"
+  until: health_response.status == 200

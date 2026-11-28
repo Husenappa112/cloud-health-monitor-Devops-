@@ -1,0 +1,25 @@
+---
+# Global variables – override in host_vars or group_vars as needed
+
+# Application
+app_name: cloud-health-monitor
+app_version: "0.0.1-SNAPSHOT"
+app_port: 8081
+app_jar: "cloud-health-monitor-{{ app_version }}.jar"
+app_deploy_dir: /opt/cloud-health-monitor
+app_user: cloudmon
+app_group: cloudmon
+
+# Docker
+docker_image: "{{ app_name }}:{{ app_version }}"
+docker_container_name: "{{ app_name }}"
+docker_host_port: "{{ app_port }}"
+docker_restart_policy: unless-stopped
+
+# Java
+java_opts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+
+# Health check
+health_check_url: "http://localhost:{{ app_port }}/health"
+health_check_retries: 5
+health_check_delay: 10
