@@ -118,6 +118,7 @@ public class DashboardBuilderController {
         if (updated.getPanels() != null) {
             dashboard.getPanels().clear();
             for (DashboardPanel p : updated.getPanels()) {
+                p.setId(null);
                 p.setDashboard(dashboard);
                 dashboard.getPanels().add(p);
             }

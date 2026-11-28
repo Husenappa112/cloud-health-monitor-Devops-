@@ -23,7 +23,7 @@ public class SavedDashboard {
     private String description;
 
     @Column(name = "is_default")
-    private boolean isDefault = false;
+    private Boolean isDefault = false;
 
     @OneToMany(mappedBy = "dashboard", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<DashboardPanel> panels = new ArrayList<>();
@@ -64,8 +64,8 @@ public class SavedDashboard {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
-    public boolean isDefault() { return isDefault; }
-    public void setDefault(boolean aDefault) { isDefault = aDefault; }
+    public boolean isDefault() { return Boolean.TRUE.equals(isDefault); }
+    public void setDefault(Boolean aDefault) { isDefault = aDefault != null ? aDefault : false; }
 
     public List<DashboardPanel> getPanels() { return panels; }
     public void setPanels(List<DashboardPanel> panels) { this.panels = panels; }

@@ -43,7 +43,7 @@ public class AlertRule {
     private String severity = "CRITICAL"; // CRITICAL, HIGH, MEDIUM, LOW, INFO
 
     @Column(nullable = false)
-    private boolean enabled = true;
+    private Boolean enabled = true;
 
     @Column(name = "notification_channels", length = 100)
     private String notificationChannels = "IN_APP"; // IN_APP, EMAIL, WEBHOOK
@@ -104,8 +104,8 @@ public class AlertRule {
     public String getSeverity() { return severity; }
     public void setSeverity(String severity) { this.severity = severity; }
 
-    public boolean isEnabled() { return enabled; }
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isEnabled() { return Boolean.TRUE.equals(enabled); }
+    public void setEnabled(Boolean enabled) { this.enabled = enabled != null ? enabled : true; }
 
     public String getNotificationChannels() { return notificationChannels; }
     public void setNotificationChannels(String notificationChannels) { this.notificationChannels = notificationChannels; }
